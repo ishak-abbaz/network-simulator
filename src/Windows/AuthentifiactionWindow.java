@@ -5,6 +5,8 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
+import java.nio.file.FileStore;
+import java.nio.file.Files;
 import java.util.TimerTask;
 import java.util.Timer;
 
@@ -94,10 +96,11 @@ public class AuthentifiactionWindow extends JFrame {
             public void run() {
                 File usbDrive = new File(USB_DRIVE_PATH);
                 boolean usbPresent = usbDrive.exists() && usbDrive.canRead();
-
                 SwingUtilities.invokeLater(() -> {
                     if (usbPresent && !isWindowShown) {
-                        showAuthenticationWindow();
+                        if(isUsbRecognized(usbDrive)) {
+                            showAuthenticationWindow("ishak");
+                        }
                     } else if (!usbPresent && isWindowShown) {
                         hideAuthenticationWindow();
                     }
@@ -106,7 +109,35 @@ public class AuthentifiactionWindow extends JFrame {
         }, 0, 1000); // Start immediately, check every 1000ms (1 second)
     }
 
-    private void showAuthenticationWindow() {
+    private boolean isUsbRecognized(File usbDrive){
+        try{
+            FileStore store = Files.getFileStore(usbDrive.toPath()); // Get usb information
+            // Safely handle the volume serial number as Number
+            Object serialObj = store.getAttribute("volume:vsn"); // Get usb serial number as an object
+            String serialHex;
+            if (serialObj instanceof Integer) { // Check object type (it could be long/integer)
+                serialHex = Integer.toHexString((Integer) serialObj).toUpperCase();
+            } else if (serialObj instanceof Long) {
+                serialHex = Long.toHexString((Long) serialObj).toUpperCase();
+            } else {
+                serialHex = "UNKNOWN";
+            }
+            if(serialHex.equals("1681C75D")){
+                return true;
+            }
+        } catch (Exception e) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(null,
+                        "Error reading USB: " + e.getMessage(),
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            });
+        }
+        return false;
+    }
+
+    private void showAuthenticationWindow(String userName) {
+        welcomeLabel.setText("Welcome " + userName);
         welcomeLabel.setVisible(true);
         passwordField.setVisible(true);
         submitButton.setVisible(true);
@@ -142,6 +173,7 @@ public class AuthentifiactionWindow extends JFrame {
         System.out.println("Password entered: " + new String(password));
         // Clear password field after submission
         passwordField.setText("");
+        hideAuthenticationWindow();
     }
 
     public String getPassword() {
