@@ -1,5 +1,7 @@
 package Windows;
 
+import Data.User;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -7,8 +9,9 @@ import java.awt.event.KeyEvent;
 import java.io.File;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
-import java.util.TimerTask;
+import java.sql.*;
 import java.util.Timer;
+import java.util.TimerTask;
 
 public class AuthentifiactionWindow extends JFrame {
 
@@ -18,6 +21,8 @@ public class AuthentifiactionWindow extends JFrame {
     private static final String USB_DRIVE_PATH = "E:"; // Adjust this to your USB drive letter
     private Timer usbCheckTimer;
     private boolean isWindowShown = false;
+    private boolean isClosedWindow = false;
+    private User user;
 
     public AuthentifiactionWindow() {
         super("Authentication");
@@ -97,9 +102,9 @@ public class AuthentifiactionWindow extends JFrame {
                 File usbDrive = new File(USB_DRIVE_PATH);
                 boolean usbPresent = usbDrive.exists() && usbDrive.canRead();
                 SwingUtilities.invokeLater(() -> {
-                    if (usbPresent && !isWindowShown) {
+                    if (usbPresent && !isWindowShown && !isClosedWindow) {
                         if(isUsbRecognized(usbDrive)) {
-                            showAuthenticationWindow("ishak");
+                            showAuthenticationWindow(user.getUserName());
                         }
                     } else if (!usbPresent && isWindowShown) {
                         hideAuthenticationWindow();
@@ -122,7 +127,8 @@ public class AuthentifiactionWindow extends JFrame {
             } else {
                 serialHex = "UNKNOWN";
             }
-            if(serialHex.equals("1681C75D")){
+            user = isUserExists(serialHex);
+            if(user != null) {
                 return true;
             }
         } catch (Exception e) {
@@ -154,6 +160,15 @@ public class AuthentifiactionWindow extends JFrame {
         isWindowShown = false;
     }
 
+    private void showUSBNotRecognizedDialog() {
+        JOptionPane.showMessageDialog(
+                null,
+                "USB not recognized. Create an account or use another usb",
+                "USB Detection Failed",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
     private void configureKeyboardShortcuts() {
         // Enter key submits form
         getRootPane().setDefaultButton(submitButton);
@@ -169,11 +184,26 @@ public class AuthentifiactionWindow extends JFrame {
 
     private void handleSubmit() {
         char[] password = passwordField.getPassword();
+
         // Add your authentication logic here
-        System.out.println("Password entered: " + new String(password));
-        // Clear password field after submission
+
+        if(user.getPassword().equals(new String(password))) {
+            // Clear password field after submission
+            passwordField.setText("");
+            hideAuthenticationWindow();
+            isClosedWindow = true;
+        }else{
+            handleIncorrectPassword();
+        }
+    }
+
+    private void handleIncorrectPassword() {
+        // Indicate that the password is incorrect
+        JOptionPane.showMessageDialog(null, "Incorrect password. Please try again.",
+                "Authentication Failed", JOptionPane.ERROR_MESSAGE);
+        // Optionally, clear the password field or keep it for re-entry
         passwordField.setText("");
-        hideAuthenticationWindow();
+        passwordField.requestFocus(); // Put cursor back in the password field
     }
 
     public String getPassword() {
@@ -183,4 +213,25 @@ public class AuthentifiactionWindow extends JFrame {
     public JButton getSubmitButton() {
         return submitButton;
     }
+
+    public User isUserExists(String serialNumber) {
+        try{
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            Connection dbConnection = DriverManager.getConnection("jdbc:mysql://localhost:3306/networksimulatorusers", "root", "root");
+            Statement dbStatement = dbConnection.createStatement();
+            ResultSet resultSet = dbStatement.executeQuery("select * from users");
+            while (resultSet.next()) {
+                if(resultSet.getString("usbSerialNum").equals(serialNumber)) {
+                    return new User(serialNumber, resultSet.getString("userName"), resultSet.getString("password"));
+                }
+            }
+        } catch (ClassNotFoundException e){
+            System.out.println("Driver not found");
+        } catch (SQLException e){
+            System.out.println("SQL error");
+        }
+        return null;
+    }
+
+
 }
