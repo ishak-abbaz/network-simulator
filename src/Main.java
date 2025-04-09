@@ -1,3 +1,4 @@
+import Windows.AdministratorWindow;
 import Windows.AuthentifiactionWindow;
 import Windows.MainWindow;
 
@@ -15,8 +16,8 @@ public class Main extends JPanel {
             e.printStackTrace();
         }
 
-//        MainWindow mainWindow = new MainWindow();
-          AuthentifiactionWindow aw = new AuthentifiactionWindow();
-
+//          MainWindow mainWindow = new MainWindow();
+//          AuthentifiactionWindow aw = new AuthentifiactionWindow();
+        AdministratorWindow adminWindow = new AdministratorWindow();
     }
 }

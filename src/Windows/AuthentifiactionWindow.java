@@ -222,7 +222,7 @@ public class AuthentifiactionWindow extends JFrame {
             ResultSet resultSet = dbStatement.executeQuery("select * from users");
             while (resultSet.next()) {
                 if(resultSet.getString("usbSerialNum").equals(serialNumber)) {
-                    return new User(serialNumber, resultSet.getString("userName"), resultSet.getString("password"));
+                    return new User(serialNumber, resultSet.getString("userName"), resultSet.getString("password"), resultSet.getString("role"));
                 }
             }
         } catch (ClassNotFoundException e){
