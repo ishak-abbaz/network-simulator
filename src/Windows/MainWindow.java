@@ -6,10 +6,7 @@ import Data.Switch;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,7 +39,13 @@ public class MainWindow extends JFrame implements ActionListener {
         devices = new ArrayList<>();
 
         // Create device display panel
-        devicePanel = new JPanel();
+        devicePanel = new JPanel(){
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                drawConnections(g); // Draw lines between linked devices
+            }
+        };
         devicePanel.setLayout(null);  // Using null layout for manual positioning
         add(new JScrollPane(devicePanel), BorderLayout.CENTER);
 
@@ -65,6 +68,52 @@ public class MainWindow extends JFrame implements ActionListener {
 
         setVisible(true);
     }
+
+    private void drawConnections(Graphics g) {
+        g.setColor(Color.BLACK); // Line color
+        for (Device device : devices) {
+            if (device instanceof Computer) {
+                Computer computer = (Computer) device;
+                String linkedDeviceName = computer.getLinkedDevice();
+                if (linkedDeviceName != null && !linkedDeviceName.equals("None")) {
+                    Device linkedDevice = findDeviceByName(linkedDeviceName);
+                    if (linkedDevice != null) {
+                        drawLineBetweenLabels(g, computer.label, linkedDevice.label);
+                    }
+                }
+            } else if (device instanceof Switch) {
+                Switch switchDevice = (Switch) device;
+                for (Device linkedDevice : switchDevice.getLinkedDevices()) {
+                    if (linkedDevice != null) {
+                        drawLineBetweenLabels(g, switchDevice.label, linkedDevice.label);
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper to find a device by name
+    private Device findDeviceByName(String name) {
+        return devices.stream()
+                .filter(d -> d.getName().equals(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    // Helper to draw a line between two JLabels
+    private void drawLineBetweenLabels(Graphics g, JLabel label1, JLabel label2) {
+        Point p1 = getLabelCenter(label1);
+        Point p2 = getLabelCenter(label2);
+        g.drawLine(p1.x, p1.y, p2.x, p2.y);
+    }
+
+    // Helper to get the center point of a JLabel
+    private Point getLabelCenter(JLabel label) {
+        int x = label.getX() + label.getWidth() / 2;
+        int y = label.getY() + label.getHeight() / 2;
+        return new Point(x, y);
+    }
+
     // Method to enter device information
     private void showAddComputerDialog() {
         // Create dialog
@@ -128,11 +177,13 @@ public class MainWindow extends JFrame implements ActionListener {
 
                 if (!found) {
 
-                    Computer computer = new Computer(name, ip, linkedDevice);
-                    // Add device to devices list
+                    JLabel label = createComputerLabel(name, ip, linkedDevice, "D:\\eclipse\\computerIcon.png");
+                    placeDeviceWithoutOverlap(label);
+
+                    Computer computer = new Computer(name, ip, label, linkedDevice);
                     devices.add(computer);
-                    // Create icon for the device and add it
-                    addComputerIcon(name);
+                    devicePanel.add(label);
+                    devicePanel.repaint();
                     dialog.dispose();
                 } else {
                     JOptionPane.showMessageDialog(dialog, "Device name already exists, please choose a different name.");
@@ -144,84 +195,114 @@ public class MainWindow extends JFrame implements ActionListener {
 
         dialog.setVisible(true);
     }
-    // Method to add icon to the main window(panel)
-    private void addComputerIcon(String name) {
-        // Create a label with computer icon
-        JLabel deviceLabel = new JLabel(name);
 
-        // Load the image from the specified path
-        ImageIcon originalIcon = new ImageIcon("D:\\eclipse\\computerIcon.png");
+    private JLabel createComputerLabel(String name, String ip, String linkedDevice, String iconPath) {
+        JLabel label = new JLabel(name);
+        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + linkedDevice + "</html>");  // simple hover
 
-        // Optional: Scale the image to a reasonable size (e.g., 64x64 pixels)
-        Image scaledImage = originalIcon.getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH);
-        ImageIcon deviceIcon = new ImageIcon(scaledImage);
-
-        // Set the icon and configure label
-        deviceLabel.setIcon(deviceIcon);
-        deviceLabel.setHorizontalTextPosition(JLabel.CENTER);
-        deviceLabel.setVerticalTextPosition(JLabel.BOTTOM);
-
-        // Position the icon (simple incremental positioning)
-        int x = (devices.size() - 1) * 100 + 20;
-        int y = 20;
-        deviceLabel.setBounds(x, y, 80, 80);
-
-        // Make the label clickable by adding a MouseListener
-        deviceLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                // Action to perform when the icon is clicked
-                String currentName = deviceLabel.getText();
-                onComputerMouseClicked(currentName);
-                // You can replace this with any action, e.g., opening a new dialog, showing device details, etc.
-            }
-
+        label.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Optional: Change cursor to hand when hovering over the icon
-                deviceLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                label.setBorder(null); // highlight
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                // Optional: Reset cursor when leaving the icon
-                deviceLabel.setCursor(Cursor.getDefaultCursor());
+                label.setBorder(null); // remove highlight
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                String currentName = label.getText();
+                onComputerMouseClicked(currentName);
+            }
+        });
+        ImageIcon icon = new ImageIcon(new ImageIcon(iconPath).getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH));
+        label.setIcon(icon);
+        label.setHorizontalTextPosition(JLabel.CENTER);
+        label.setVerticalTextPosition(JLabel.BOTTOM);
+        label.setSize(80, 80);
+        Point[] offset = {null};  // to store drag offset
+
+        label.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                offset[0] = new Point(e.getX(), e.getY());
             }
         });
 
-        devicePanel.add(deviceLabel);
-        devicePanel.revalidate();
-        devicePanel.repaint();
+        label.addMouseMotionListener(new MouseMotionAdapter() {
+            public void mouseDragged(MouseEvent e) {
+                int x = label.getX() + e.getX() - offset[0].x;
+                int y = label.getY() + e.getY() - offset[0].y;
+
+                // Constrain x and y to stay within devicePanel bounds
+                int minX = 0;
+                int minY = 0;
+                int maxX = devicePanel.getWidth() - label.getWidth();
+                int maxY = devicePanel.getHeight() - label.getHeight();
+
+                x = Math.max(minX, Math.min(x, maxX));
+                y = Math.max(minY, Math.min(y, maxY));
+
+                label.setLocation(x, y);
+                devicePanel.repaint();
+            }
+        });
+        return label;
     }
 
+    private void placeDeviceWithoutOverlap(JLabel label) {
+        int padding = 100;
+        boolean placed = false;
 
-    private void onComputerMouseClicked(String name) {
-        // Find the selected device
-        System.out.println(name);
-        Device selectedDevice = devices.stream()
-                .filter(d -> d.getName().equals(name))
-                .findFirst()
-                .orElse(null);
-        // Check if the device exists and is a Computer
+        for (int x = 20; x < devicePanel.getWidth() - 80; x += padding) {
+            for (int y = 20; y < devicePanel.getHeight() - 80; y += padding) {
+                Rectangle newBounds = new Rectangle(x, y, 80, 80);
+                boolean overlap = false;
 
-        Computer computer;
-        if (selectedDevice instanceof Computer) {
-            computer = (Computer) selectedDevice;
-        } else {
-            computer = null;
+                for (Device d : devices) {
+                    if (d.label.getBounds().intersects(newBounds)) {
+                        overlap = true;
+                        break;
+                    }
+                }
+
+                if (!overlap) {
+                    label.setBounds(newBounds);
+                    placed = true;
+                    break;
+                }
+            }
+            if (placed) break;
         }
 
-        // Create the dialog
+        if (!placed) label.setBounds(20, 20, 80, 80); // fallback
+    }
+
+    private void onComputerMouseClicked(String name) {
+
+        // Retrieve the selected device based on the name
+        Computer computer = devices.stream()
+                .filter(d -> d instanceof Computer && d.getName().equals(name))
+                .map(d -> (Computer) d)
+                .findFirst()
+                .orElse(null);
+
+
+
+        if (computer == null) {
+            JOptionPane.showMessageDialog(this, "Selected device is not a Computer.");
+            return;
+        }
+
+        // Create the device information dialog
         JDialog dialog = new JDialog(this, "Device Information", true);
         dialog.setSize(300, 180);
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout(10, 10));
 
-        // Content panel for device details
-        JPanel contentPanel = new JPanel(new GridLayout(3, 3, 10, 10));
+        JPanel contentPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        // Add device details
         contentPanel.add(new JLabel("Name:"));
         contentPanel.add(new JLabel(computer.getName()));
         contentPanel.add(new JLabel("IP Address:"));
@@ -229,124 +310,96 @@ public class MainWindow extends JFrame implements ActionListener {
         contentPanel.add(new JLabel("Linked Device:"));
         contentPanel.add(new JLabel(computer.getLinkedDevice()));
 
-        // Button panel (only show buttons if a Computer is selected)
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        if (computer != null) {
-            JButton deleteButton = new JButton("Delete");
-            JButton editButton = new JButton("Edit");
+        JButton deleteButton = new JButton("Delete");
+        JButton editButton = new JButton("Edit");
 
-            buttonPanel.add(editButton);
-            buttonPanel.add(deleteButton);
+        // Delete button action
+        deleteButton.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(dialog,
+                    "Delete " + computer.getName() + "?", "Confirm", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                devices.remove(computer);
+                devicePanel.remove(computer.label);
+                devicePanel.revalidate();
+                devicePanel.repaint();
+                dialog.dispose();
+            }
+        });
 
-            // Delete button action
-            deleteButton.addActionListener(e -> {
-                int confirm = JOptionPane.showConfirmDialog(dialog,
-                        "Are you sure you want to delete " + computer.getName() + "?",
-                        "Confirm Deletion", JOptionPane.YES_NO_OPTION);
-                if (confirm == JOptionPane.YES_OPTION) {
-                    devices.remove(computer);
-                    // Remove the corresponding icon from devicePanel
-                    for (Component comp : devicePanel.getComponents()) {
-                        if (comp instanceof JLabel && ((JLabel) comp).getText().equals(name)) {
-                            devicePanel.remove(comp);
-                            break;
-                        }
-                    }
-                    devicePanel.revalidate();
-                    devicePanel.repaint();
-                    dialog.dispose();
-                }
-            });
+        // Edit button action
+        editButton.addActionListener(e -> showEditDialog(computer, dialog));
 
-            // Edit button action
-            editButton.addActionListener(e -> {
-                // Create an edit dialog
-                JDialog editDialog = new JDialog(dialog, "Edit Device", true);
-                editDialog.setSize(300, 200);
-                editDialog.setLocationRelativeTo(dialog);
-                editDialog.setLayout(new BorderLayout(10, 10));
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(editButton);
+        buttonPanel.add(deleteButton);
 
-                // Input fields pre-filled with current values
-                JTextField nameField = new JTextField(computer.getName());
-                JTextField ipField = new JTextField(computer.getIp());
-
-                JComboBox<String> linkedDeviceCombo = new JComboBox<>();
-                boolean isLinked = !computer.getLinkedDevice().equals("None");
-                if(isLinked){
-                    linkedDeviceCombo.addItem(computer.getLinkedDevice());
-                    for (Device d : devices) {
-                        if(!d.getName().equals(computer.getLinkedDevice())) {
-                            if(!d.getName().equals(computer.getName())) {
-                                linkedDeviceCombo.addItem(d.getName());
-                            }
-                        }
-                    }
-                    linkedDeviceCombo.addItem("None");
-                }else{
-                    linkedDeviceCombo.addItem("None");
-                    for (Device d : devices) {
-                        if(!d.getName().equals(computer.getName())) {
-                            linkedDeviceCombo.addItem(d.getName());
-                        }
-                    }
-                }
-
-
-                JPanel editPanel = new JPanel(new GridLayout(3, 3, 10, 10));
-                editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-                editPanel.add(new JLabel("Name:"));
-                editPanel.add(nameField);
-                editPanel.add(new JLabel("IP Address:"));
-                editPanel.add(ipField);
-                editPanel.add(new JLabel("Linked Device:"));
-                editPanel.add(linkedDeviceCombo);
-
-                JButton saveButton = new JButton("Save");
-                JPanel editButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-                editButtonPanel.add(saveButton);
-
-                saveButton.addActionListener(saveEvent -> {
-                    String newName = nameField.getText();
-                    String newIp = ipField.getText();
-                    String newLinkedDevice = linkedDeviceCombo.getSelectedItem().toString();
-
-                    if (!newName.isEmpty() && !newIp.isEmpty()) {
-                        computer.setName(newName);
-                        computer.setIp(newIp);
-                        computer.setLinkedDevice(newLinkedDevice);
-                        // Update the icon text if the name changes
-                        for (Component comp : devicePanel.getComponents()) {
-                            if (comp instanceof JLabel && ((JLabel) comp).getText().equals(name)) {
-                                ((JLabel) comp).setText(newName);
-                                break;
-                            }
-                        }
-                        devicePanel.revalidate();
-                        devicePanel.repaint();
-                        editDialog.dispose();
-                        dialog.dispose();
-                    } else {
-                        JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
-                    }
-                });
-
-                editDialog.add(editPanel, BorderLayout.CENTER);
-                editDialog.add(editButtonPanel, BorderLayout.SOUTH);
-                editDialog.setVisible(true);
-            });
-        } else {
-            // If not a Computer, show a message instead of buttons
-            buttonPanel.add(new JLabel("Not a Computer device"));
-        }
-
-        // Add panels to dialog
         dialog.add(contentPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
         dialog.setVisible(true);
     }
 
-    // Add switch segment
+    private void showEditDialog(Computer computer, JDialog parentDialog) {
+        // Create the edit dialog
+        JDialog editDialog = new JDialog(parentDialog, "Edit Device", true);
+        editDialog.setSize(300, 200);
+        editDialog.setLocationRelativeTo(parentDialog);
+        editDialog.setLayout(new BorderLayout(10, 10));
 
+        // Pre-fill input fields with current values
+        JTextField nameField = new JTextField(computer.getName());
+        JTextField ipField = new JTextField(computer.getIp());
+
+        // Set up linked device combo box
+        JComboBox<String> linkedDeviceCombo = new JComboBox<>();
+        linkedDeviceCombo.addItem("None");
+        for (Device d : devices) {
+            if (!d.getName().equals(computer.getName())) {
+                linkedDeviceCombo.addItem(d.getName());
+            }
+        }
+        linkedDeviceCombo.setSelectedItem(computer.getLinkedDevice());
+
+        JPanel editPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        editPanel.add(new JLabel("Name:"));
+        editPanel.add(nameField);
+        editPanel.add(new JLabel("IP Address:"));
+        editPanel.add(ipField);
+        editPanel.add(new JLabel("Linked Device:"));
+        editPanel.add(linkedDeviceCombo);
+
+        JButton saveButton = new JButton("Save");
+        saveButton.addActionListener(e -> {
+            String newName = nameField.getText();
+            String newIp = ipField.getText();
+            String newLinked = (String) linkedDeviceCombo.getSelectedItem();
+
+            if (!newName.isEmpty() && !newIp.isEmpty()) {
+                // Update device fields and the label
+                computer.setName(newName);
+                computer.setIp(newIp);
+                computer.setLinkedDevice(newLinked);
+                computer.label.setText(newName); // Update the JLabel with the new name
+
+                // Update the tooltip with new values
+                computer.label.setToolTipText("<html>Name: " + newName + "<br>IP: " + newIp + "<br>Linked: " + newLinked + "</html>");
+
+                devicePanel.repaint();  // Repaint to reflect changes
+                editDialog.dispose();  // Close the edit dialog
+                parentDialog.dispose(); // Close the parent dialog
+            } else {
+                JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
+            }
+        });
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(saveButton);
+
+        editDialog.add(editPanel, BorderLayout.CENTER);
+        editDialog.add(buttonPanel, BorderLayout.SOUTH);
+        editDialog.setVisible(true);
+    }
+    // Add switch segment
     private void showAddSwitchDialog() {
         // Create dialog
         JDialog dialog = new JDialog(this, "Add Switch", true);
@@ -411,203 +464,198 @@ public class MainWindow extends JFrame implements ActionListener {
                     break;
                 }
             }
-
             if (found) {
                 JOptionPane.showMessageDialog(dialog, "Device name already exists, please choose a different name.");
             } else {
 
-                // Create and add the new Switch
-                Switch newSwitch = new Switch(name, ip);
-                devices.add(newSwitch);
-                addSwitchIcon(name); // Rename to addSwitchIcon if appropriate
+                JLabel label = createSwitchLabel(name, ip, "no linked devices", "D:\\eclipse\\switchIcon.png");
+                placeDeviceWithoutOverlap(label);
 
-                dialog.dispose(); // Close dialog on success
+                Switch newSwitch = new Switch(name, ip, label);
+                
+                devices.add(newSwitch);
+                devicePanel.add(label);
+                devicePanel.repaint();
+                dialog.dispose();
             }
         });
 
         dialog.setVisible(true);
     }
 
-    // Method to add icon to the main window(panel)
-    private void addSwitchIcon(String name) {
-        // Create a label with computer icon
-        JLabel deviceLabel = new JLabel(name);
+    private JLabel createSwitchLabel(String name, String ip, String linkedDevices, String iconPath) {
+        JLabel label = new JLabel(name);
+        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + linkedDevices + "</html>");  // simple hover
 
-        // Load the image from the specified path
-        ImageIcon originalIcon = new ImageIcon("D:\\eclipse\\switchIcon.png");
-
-        // Optional: Scale the image to a reasonable size (e.g., 64x64 pixels)
-        Image scaledImage = originalIcon.getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH);
-        ImageIcon deviceIcon = new ImageIcon(scaledImage);
-
-        // Set the icon and configure label
-        deviceLabel.setIcon(deviceIcon);
-        deviceLabel.setHorizontalTextPosition(JLabel.CENTER);
-        deviceLabel.setVerticalTextPosition(JLabel.BOTTOM);
-
-        // Position the icon (simple incremental positioning)
-        int x = (devices.size() - 1) * 100 + 20;
-        int y = 20;
-        deviceLabel.setBounds(x, y, 80, 80);
-
-        // Make the label clickable by adding a MouseListener
-        deviceLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                // Action to perform when the icon is clicked
-                String currentName = deviceLabel.getText();
-                onSwitchMouseClicked(currentName);
-                // You can replace this with any action, e.g., opening a new dialog, showing device details, etc.
-            }
-
+        label.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Optional: Change cursor to hand when hovering over the icon
-                deviceLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                label.setBorder(null); // highlight
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                // Optional: Reset cursor when leaving the icon
-                deviceLabel.setCursor(Cursor.getDefaultCursor());
+                label.setBorder(null); // remove highlight
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                String currentName = label.getText();
+                onSwitchMouseClicked(currentName);
+            }
+        });
+        ImageIcon icon = new ImageIcon(new ImageIcon(iconPath).getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH));
+        label.setIcon(icon);
+        label.setHorizontalTextPosition(JLabel.CENTER);
+        label.setVerticalTextPosition(JLabel.BOTTOM);
+        label.setSize(80, 80);
+        Point[] offset = {null};  // to store drag offset
+
+        label.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                offset[0] = new Point(e.getX(), e.getY());
             }
         });
 
-        devicePanel.add(deviceLabel);
-        devicePanel.revalidate();
-        devicePanel.repaint();
+        label.addMouseMotionListener(new MouseMotionAdapter() {
+            public void mouseDragged(MouseEvent e) {
+                int x = label.getX() + e.getX() - offset[0].x;
+                int y = label.getY() + e.getY() - offset[0].y;
+
+                // Constrain x and y to stay within devicePanel bounds
+                int minX = 0;
+                int minY = 0;
+                int maxX = devicePanel.getWidth() - label.getWidth();
+                int maxY = devicePanel.getHeight() - label.getHeight();
+
+                x = Math.max(minX, Math.min(x, maxX));
+                y = Math.max(minY, Math.min(y, maxY));
+
+                label.setLocation(x, y);
+                devicePanel.repaint();
+            }
+        });
+        return label;
     }
-//
-//
+
     private void onSwitchMouseClicked(String name) {
-        // Find the selected device
-        Device selectedDevice = devices.stream()
-                .filter(d -> d.getName().equals(name))
+
+        // Retrieve the selected device based on the name
+        Switch switchDevice = devices.stream()
+                .filter(d -> d instanceof Switch && d.getName().equals(name))
+                .map(d -> (Switch) d)
                 .findFirst()
                 .orElse(null);
 
-        // Check if the device exists and is a Switch
-        Switch selectedSwitch;
-        if (selectedDevice instanceof Switch) {
-            selectedSwitch = (Switch) selectedDevice;
-        } else {
-            selectedSwitch = null;
+
+
+        if (switchDevice == null) {
+            JOptionPane.showMessageDialog(this, "Selected device is not a Computer.");
+            return;
         }
 
-        // Create the dialog
+        // Create the device information dialog
         JDialog dialog = new JDialog(this, "Device Information", true);
         dialog.setSize(300, 180);
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout(10, 10));
 
-        // Content panel for device details
-        JPanel contentPanel = new JPanel(new GridLayout(3, 3, 10, 10));
+        JPanel contentPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        // Add device details
         contentPanel.add(new JLabel("Name:"));
-        contentPanel.add(new JLabel(selectedSwitch.getName()));
+        contentPanel.add(new JLabel(switchDevice.getName()));
         contentPanel.add(new JLabel("IP Address:"));
-        contentPanel.add(new JLabel(selectedSwitch.getIp()));
+        contentPanel.add(new JLabel(switchDevice.getIp()));
         contentPanel.add(new JLabel("Linked Device:"));
-        List<Device> linkedDevices = selectedSwitch.getLinkedDevices();
-        String deviceNames = linkedDevices.stream()
-                .map(Device::getName) // Assuming Device has a getName() method
-                .collect(Collectors.joining(", "));
-        contentPanel.add(new JLabel(deviceNames));
+        contentPanel.add(new JLabel(switchDevice.getLinkedDevices().toString()));
 
+        JButton deleteButton = new JButton("Delete");
+        JButton editButton = new JButton("Edit");
 
-        // Button panel (only show buttons if a Computer is selected)
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        if (selectedSwitch != null) {
-            JButton deleteButton = new JButton("Delete");
-            JButton editButton = new JButton("Edit");
+        // Delete button action
+        deleteButton.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(dialog,
+                    "Delete " + switchDevice.getName() + "?", "Confirm", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                devices.remove(switchDevice);
+                devicePanel.remove(switchDevice.label);
+                devicePanel.revalidate();
+                devicePanel.repaint();
+                dialog.dispose();
+            }
+        });
 
-            buttonPanel.add(editButton);
-            buttonPanel.add(deleteButton);
+        // Edit button action
+        editButton.addActionListener(e -> switchEditDialog(switchDevice, dialog));
 
-            // Delete button action
-            deleteButton.addActionListener(e -> {
-                int confirm = JOptionPane.showConfirmDialog(dialog,
-                        "Are you sure you want to delete " + selectedSwitch.getName() + "?",
-                        "Confirm Deletion", JOptionPane.YES_NO_OPTION);
-                if (confirm == JOptionPane.YES_OPTION) {
-                    devices.remove(selectedSwitch);
-                    // Remove the corresponding icon from devicePanel
-                    for (Component comp : devicePanel.getComponents()) {
-                        if (comp instanceof JLabel && ((JLabel) comp).getText().equals(name)) {
-                            devicePanel.remove(comp);
-                            break;
-                        }
-                    }
-                    devicePanel.revalidate();
-                    devicePanel.repaint();
-                    dialog.dispose();
-                }
-            });
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(editButton);
+        buttonPanel.add(deleteButton);
 
-            // Edit button action
-            editButton.addActionListener(e -> {
-                // Create an edit dialog
-                JDialog editDialog = new JDialog(dialog, "Edit Device", true);
-                editDialog.setSize(300, 200);
-                editDialog.setLocationRelativeTo(dialog);
-                editDialog.setLayout(new BorderLayout(10, 10));
-
-                // Input fields pre-filled with current values
-                JTextField nameField = new JTextField(selectedSwitch.getName());
-                JTextField ipField = new JTextField(selectedSwitch.getIp());
-
-
-                JPanel editPanel = new JPanel(new GridLayout(3, 3, 10, 10));
-                editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-                editPanel.add(new JLabel("Name:"));
-                editPanel.add(nameField);
-                editPanel.add(new JLabel("IP Address:"));
-                editPanel.add(ipField);
-                editPanel.add(new JLabel("Linked Device:"));
-                editPanel.add(new JLabel(""));
-
-                JButton saveButton = new JButton("Save");
-                JPanel editButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-                editButtonPanel.add(saveButton);
-
-                saveButton.addActionListener(saveEvent -> {
-                    String newName = nameField.getText();
-                    String newIp = ipField.getText();
-
-                    if (!newName.isEmpty() && !newIp.isEmpty()) {
-                        selectedSwitch.setName(newName);
-                        selectedSwitch.setIp(newIp);
-                        // Update the icon text if the name changes
-                        for (Component comp : devicePanel.getComponents()) {
-                            if (comp instanceof JLabel && ((JLabel) comp).getText().equals(name)) {
-                                ((JLabel) comp).setText(newName);
-                                break;
-                            }
-                        }
-                        devicePanel.revalidate();
-                        devicePanel.repaint();
-                        editDialog.dispose();
-                        dialog.dispose();
-                    } else {
-                        JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
-                    }
-                });
-
-                editDialog.add(editPanel, BorderLayout.CENTER);
-                editDialog.add(editButtonPanel, BorderLayout.SOUTH);
-                editDialog.setVisible(true);
-            });
-        } else {
-            // If not a Computer, show a message instead of buttons
-            buttonPanel.add(new JLabel("Not a Computer device"));
-        }
-
-        // Add panels to dialog
         dialog.add(contentPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
         dialog.setVisible(true);
+    }
+
+    private void switchEditDialog(Switch switchDevice, JDialog parentDialog) {
+        // Create the edit dialog
+        JDialog editDialog = new JDialog(parentDialog, "Edit Device", true);
+        editDialog.setSize(300, 200);
+        editDialog.setLocationRelativeTo(parentDialog);
+        editDialog.setLayout(new BorderLayout(10, 10));
+
+        // Pre-fill input fields with current values
+        JTextField nameField = new JTextField(switchDevice.getName());
+        JTextField ipField = new JTextField(switchDevice.getIp());
+
+        // Set up linked device combo box
+        JComboBox<String> linkedDeviceCombo = new JComboBox<>();
+        linkedDeviceCombo.addItem("None");
+        for (Device d : devices) {
+            if (!d.getName().equals(switchDevice.getName())) {
+                linkedDeviceCombo.addItem(d.getName());
+            }
+        }
+        linkedDeviceCombo.setSelectedItem(switchDevice.getLinkedDevices().toString());
+
+        JPanel editPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        editPanel.add(new JLabel("Name:"));
+        editPanel.add(nameField);
+        editPanel.add(new JLabel("IP Address:"));
+        editPanel.add(ipField);
+        editPanel.add(new JLabel("Linked Device:"));
+        editPanel.add(linkedDeviceCombo);
+
+        JButton saveButton = new JButton("Save");
+        saveButton.addActionListener(e -> {
+            String newName = nameField.getText();
+            String newIp = ipField.getText();
+
+            if (!newName.isEmpty() && !newIp.isEmpty()) {
+                // Update device fields and the label
+                switchDevice.setName(newName);
+                switchDevice.setIp(newIp);
+                switchDevice.setLinkedDevices(switchDevice.getLinkedDevices());
+                switchDevice.label.setText(newName); // Update the JLabel with the new name
+
+                // Update the tooltip with new values
+                switchDevice.label.setToolTipText("<html>Name: " + newName + "<br>IP: " + newIp + "<br>Linked: " + switchDevice.getLinkedDevices().toString() + "</html>");
+
+                devicePanel.repaint();  // Repaint to reflect changes
+                editDialog.dispose();  // Close the edit dialog
+                parentDialog.dispose(); // Close the parent dialog
+            } else {
+                JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
+            }
+        });
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(saveButton);
+
+        editDialog.add(editPanel, BorderLayout.CENTER);
+        editDialog.add(buttonPanel, BorderLayout.SOUTH);
+        editDialog.setVisible(true);
     }
 
 }

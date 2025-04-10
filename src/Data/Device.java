@@ -1,13 +1,17 @@
 package Data;
 
+import javax.swing.*;
+
 public class Device {
     private String name;
     private String ip;
+    public JLabel label;
 
     // Constructor
-    public Device(String name, String ipAddress) {
+    public Device(String name, String ipAddress, JLabel label) {
         this.name = name;
         this.ip = ipAddress;
+        this.label = label;
     }
 
     // Getters and setters
@@ -26,6 +30,7 @@ public class Device {
     public void setIp(String ipAddress) {
         this.ip = ipAddress;
     }
+
 
     // toString method for easy display
     @Override

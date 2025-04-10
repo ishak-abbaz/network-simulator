@@ -1,9 +1,11 @@
 package Data;
 
+import javax.swing.*;
+
 public class Computer extends Device {
     private String linkedDevice;
-    public Computer(String name, String ipAddress, String linkedDevice) {
-        super(name, ipAddress);
+    public Computer(String name, String ipAddress, JLabel label, String linkedDevice) {
+        super(name, ipAddress, label);
         this.linkedDevice = linkedDevice;
     }
 
