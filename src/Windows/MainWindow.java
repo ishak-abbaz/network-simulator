@@ -401,11 +401,13 @@ public class MainWindow extends JFrame implements ActionListener {
     }
     // Add switch segment
     private void showAddSwitchDialog() {
+        List<Device> linkedDevices = new ArrayList<Device>();
+
         // Create dialog
-        JDialog dialog = new JDialog(this, "Add Switch", true);
-        dialog.setSize(300, 200); // Adjusted size for compact layout
-        dialog.setLayout(new BorderLayout(4, 4));
-        dialog.setLocationRelativeTo(this);
+        JDialog addSwitchDialog = new JDialog(this, "Add Switch", true);
+        addSwitchDialog.setSize(300, 200);
+        addSwitchDialog.setLayout(new BorderLayout(4, 4));
+        addSwitchDialog.setLocationRelativeTo(this);
 
         // Panel that contains device information
         JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
@@ -415,25 +417,85 @@ public class MainWindow extends JFrame implements ActionListener {
         JTextField nameField = new JTextField();
         JTextField ipField = new JTextField();
 
-        // JList with multiple selection
-        DefaultListModel<String> model = new DefaultListModel<>();
-        for (Device device : devices) {
-            model.addElement(device.getName()); // Only store names
-        }
-        JList<String> list = new JList<>(model);
-        list.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        JPanel linkedDevicesPanel = new JPanel();
 
-        // Add list to a scroll pane
-        JScrollPane scrollPane = new JScrollPane(list);
+        JLabel linkedLabel = new JLabel(String.valueOf(linkedDevices.size()));
 
-        // Input panel with 3 labels, 2 text fields, and dropdown
+        // Create a small "Link" button
+        JButton linkButton = new JButton("Link");
+        linkButton.setPreferredSize(new Dimension(80, 30));
+
+        linkedDevicesPanel.add(linkedLabel);
+        linkedDevicesPanel.add(linkButton);
+
+        linkButton.addActionListener(e -> {
+            // Create dialog
+            JDialog dialog = new JDialog(addSwitchDialog, "Select Devices to Link", true);
+            dialog.setSize(200, 250);
+            dialog.setLayout(new BorderLayout());
+
+            // Panel for checkboxes
+            JPanel checkBoxPanel = new JPanel();
+            checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.Y_AXIS));
+
+            // Create checkboxes for all devices
+            List<JCheckBox> checkBoxes = new ArrayList<>();
+            for (Device d : devices) {
+                JCheckBox checkBox = new JCheckBox(d.getName());
+                checkBox.setSelected(linkedDevices.contains(d));
+                checkBoxes.add(checkBox);
+                checkBoxPanel.add(checkBox);
+            }
+
+            // Add checkboxes to scroll pane
+            JScrollPane scrollPane = new JScrollPane(checkBoxPanel);
+            dialog.add(scrollPane, BorderLayout.CENTER);
+
+            // Confirm and Cancel buttons
+            JPanel buttonPanel = new JPanel();
+            JButton confirmButton = new JButton("Confirm");
+            JButton cancelButton = new JButton("Cancel");
+
+            // Confirm action
+            confirmButton.addActionListener(e1 -> {
+                // Update linked devices based on selections
+                linkedDevices.clear();
+                for (JCheckBox checkBox : checkBoxes) {
+                    if (checkBox.isSelected()) {
+                        for (Device d : devices) {
+                            if (d.getName().equals(checkBox.getText())) {
+                                linkedDevices.add(d);
+                                break; // Avoid duplicate matches
+                            }
+                        }
+                    }
+                }
+                // Update label with count of linked devices
+                linkedLabel.setText(String.valueOf(linkedDevices.size()));
+                dialog.dispose();
+            });
+
+            // Cancel action
+            cancelButton.addActionListener(e1 -> dialog.dispose());
+
+            // Add buttons to dialog
+            buttonPanel.add(confirmButton);
+            buttonPanel.add(cancelButton);
+            dialog.add(buttonPanel, BorderLayout.SOUTH);
+
+            // Center dialog
+            dialog.setLocationRelativeTo(addSwitchDialog);
+            dialog.setVisible(true);
+        });
+
+        // Input panel with 3 labels, 2 text fields, and linked devices panel
         JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         inputPanel.add(new JLabel("Name:"));
         inputPanel.add(nameField);
         inputPanel.add(new JLabel("IP Address:"));
         inputPanel.add(ipField);
         inputPanel.add(new JLabel("Linked Devices:"));
-        inputPanel.add(scrollPane);
+        inputPanel.add(linkedDevicesPanel);
 
         // Button panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -443,7 +505,7 @@ public class MainWindow extends JFrame implements ActionListener {
         // Add panels to the content panel
         contentPanel.add(inputPanel, BorderLayout.CENTER);
         contentPanel.add(buttonPanel, BorderLayout.SOUTH);
-        dialog.setContentPane(contentPanel);
+        addSwitchDialog.setContentPane(contentPanel);
 
         // OK button action
         okButton.addActionListener(e -> {
@@ -452,7 +514,7 @@ public class MainWindow extends JFrame implements ActionListener {
 
             // Validate inputs
             if (name.isEmpty() || ip.isEmpty()) {
-                JOptionPane.showMessageDialog(dialog, "Please fill all required fields");
+                JOptionPane.showMessageDialog(addSwitchDialog, "Please fill all required fields");
                 return;
             }
 
@@ -465,22 +527,49 @@ public class MainWindow extends JFrame implements ActionListener {
                 }
             }
             if (found) {
-                JOptionPane.showMessageDialog(dialog, "Device name already exists, please choose a different name.");
+                JOptionPane.showMessageDialog(addSwitchDialog, "Device name already exists, please choose a different name.");
             } else {
-
-                JLabel label = createSwitchLabel(name, ip, "no linked devices", "D:\\eclipse\\switchIcon.png");
+                String names = linkedDevices.stream().map(Device::getName).collect(Collectors.joining(", "));
+                // Create new switch
+                String linkedDeviceName = linkedDevices.isEmpty() ? "None" : names;
+                JLabel label = createSwitchLabel(name, ip, linkedDeviceName, "D:\\eclipse\\switchIcon.png");
                 placeDeviceWithoutOverlap(label);
 
                 Switch newSwitch = new Switch(name, ip, label);
-                
+                // Set only the first linked device for the new switch
+                List<Device> singleLinkedDevice = new ArrayList<>();
+                if (!linkedDevices.isEmpty()) {
+                    singleLinkedDevice.add(linkedDevices.get(0));
+                }
+                newSwitch.setLinkedDevices(singleLinkedDevice);
+
+                // Update linked devices based on their type
+                for (Device d : linkedDevices) {
+                    if (d instanceof Computer) {
+                        // If the device is a Computer, set the new Switch as its linked device
+                        ((Computer) d).setLinkedDevice(newSwitch.getName());
+                    } else if (d instanceof Switch) {
+                        // If the device is a Switch, add the new Switch to its linked devices list
+                        List<Device> existingLinkedDevices = ((Switch) d).getLinkedDevices();
+                        if (existingLinkedDevices == null) {
+                            existingLinkedDevices = new ArrayList<>();
+                            ((Switch) d).setLinkedDevices(existingLinkedDevices);
+                        }
+                        if (!existingLinkedDevices.contains(newSwitch)) {
+                            existingLinkedDevices.add(newSwitch);
+                        }
+                    }
+                }
+
+                // Add to devices list and panel
                 devices.add(newSwitch);
                 devicePanel.add(label);
                 devicePanel.repaint();
-                dialog.dispose();
+                addSwitchDialog.dispose();
             }
         });
 
-        dialog.setVisible(true);
+        addSwitchDialog.setVisible(true);
     }
 
     private JLabel createSwitchLabel(String name, String ip, String linkedDevices, String iconPath) {
@@ -567,7 +656,8 @@ public class MainWindow extends JFrame implements ActionListener {
         contentPanel.add(new JLabel("IP Address:"));
         contentPanel.add(new JLabel(switchDevice.getIp()));
         contentPanel.add(new JLabel("Linked Device:"));
-        contentPanel.add(new JLabel(switchDevice.getLinkedDevices().toString()));
+        String names = switchDevice.getLinkedDevices().stream().map(Device::getName).collect(Collectors.joining(", "));
+        contentPanel.add(new JLabel(names));
 
         JButton deleteButton = new JButton("Delete");
         JButton editButton = new JButton("Edit");
@@ -608,15 +698,80 @@ public class MainWindow extends JFrame implements ActionListener {
         JTextField nameField = new JTextField(switchDevice.getName());
         JTextField ipField = new JTextField(switchDevice.getIp());
 
-        // Set up linked device combo box
-        JComboBox<String> linkedDeviceCombo = new JComboBox<>();
-        linkedDeviceCombo.addItem("None");
-        for (Device d : devices) {
-            if (!d.getName().equals(switchDevice.getName())) {
-                linkedDeviceCombo.addItem(d.getName());
+        JPanel linkedDevicesPanel = new JPanel();
+
+        JLabel linkedLabel = new JLabel(String.valueOf(switchDevice.getLinkedDevices().size()));
+
+        // Create a small "Link" button
+        JButton linkButton = new JButton("Link");
+        linkButton.setSize(80, 30); // Small button size
+
+        linkedDevicesPanel.add(linkedLabel);
+        linkedDevicesPanel.add(linkButton);
+
+        linkButton.addActionListener(e -> {
+            // Create dialog
+            JDialog dialog = new JDialog(this, "Select Devices to Link", true);
+            dialog.setSize(200, 250);
+            dialog.setLayout(new BorderLayout());
+
+            // Panel for checkboxes
+            JPanel checkBoxPanel = new JPanel();
+            checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.Y_AXIS));
+
+            List<Device> linkedDevices = switchDevice.getLinkedDevices();
+
+            // Create checkboxes for all devices
+            List<JCheckBox> checkBoxes = new ArrayList<>();
+            for (Device d : devices) {
+                if(!d.getName().equals(switchDevice.getName())) {
+                    JCheckBox checkBox = new JCheckBox(d.getName());
+                    checkBox.setSelected(switchDevice.getLinkedDevices().contains(d));
+                    checkBoxes.add(checkBox);
+                    checkBoxPanel.add(checkBox);
+                }
             }
-        }
-        linkedDeviceCombo.setSelectedItem(switchDevice.getLinkedDevices().toString());
+
+            // Add checkboxes to scroll pane
+            JScrollPane scrollPane = new JScrollPane(checkBoxPanel);
+            dialog.add(scrollPane, BorderLayout.CENTER);
+
+            // Confirm and Cancel buttons
+            JPanel buttonPanel = new JPanel();
+            JButton confirmButton = new JButton("Confirm");
+            JButton cancelButton = new JButton("Cancel");
+
+            // Confirm action
+            confirmButton.addActionListener(e1 -> {
+                // Update linked devices based on selections
+                linkedDevices.clear();
+                for (JCheckBox checkBox : checkBoxes) {
+                    if (checkBox.isSelected()) {
+                        for (Device d : devices) {
+                            if (d.getName().equals(checkBox.getText())) {
+                                linkedDevices.add(d);
+                            }
+                        }
+                    }
+                }
+                // Update label
+                linkedLabel.setText(String.valueOf(linkedDevices.size()));
+                switchDevice.setLinkedDevices(linkedDevices);
+                dialog.dispose();
+            });
+
+            // Cancel action
+            cancelButton.addActionListener(e1 -> dialog.dispose());
+
+            // Add buttons to dialog
+            buttonPanel.add(confirmButton);
+            buttonPanel.add(cancelButton);
+            dialog.add(buttonPanel, BorderLayout.SOUTH);
+
+            // Center dialog
+            dialog.setLocationRelativeTo(this);
+            dialog.setVisible(true);
+        });
 
         JPanel editPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -625,7 +780,7 @@ public class MainWindow extends JFrame implements ActionListener {
         editPanel.add(new JLabel("IP Address:"));
         editPanel.add(ipField);
         editPanel.add(new JLabel("Linked Device:"));
-        editPanel.add(linkedDeviceCombo);
+        editPanel.add(linkedDevicesPanel);
 
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
