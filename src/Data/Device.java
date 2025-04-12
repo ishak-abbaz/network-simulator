@@ -2,19 +2,17 @@ package Data;
 
 import javax.swing.*;
 
-public class Device {
-    private String name;
-    private String ip;
+public abstract class Device {
+    protected String name;
+    protected String ip;
     public JLabel label;
 
-    // Constructor
     public Device(String name, String ipAddress, JLabel label) {
         this.name = name;
         this.ip = ipAddress;
         this.label = label;
     }
 
-    // Getters and setters
     public String getName() {
         return name;
     }
@@ -31,8 +29,6 @@ public class Device {
         this.ip = ipAddress;
     }
 
-
-    // toString method for easy display
     @Override
     public String toString() {
         return "Name: " + name + ", IP: " + ip;

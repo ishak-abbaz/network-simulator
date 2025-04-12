@@ -13,24 +13,19 @@ import java.util.stream.Collectors;
 
 public class MainWindow extends JFrame implements ActionListener {
 
-    // Buttons
     private JButton addComputerButton, addSwitchButton;
-    // Panel
     private JPanel devicePanel;
-    // Devices list
     private ArrayList<Device> devices;
 
-    // OnClick operations
-    public void actionPerformed(ActionEvent ae){
-        if(addComputerButton.equals(ae.getSource())){
+    public void actionPerformed(ActionEvent ae) {
+        if (addComputerButton.equals(ae.getSource())) {
             showAddComputerDialog();
-        }else{
+        } else {
             showAddSwitchDialog();
         }
     }
 
     public MainWindow() {
-        // Set up the frame
         setTitle("Network Simulator");
         setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -38,48 +33,39 @@ public class MainWindow extends JFrame implements ActionListener {
 
         devices = new ArrayList<>();
 
-        // Create device display panel
-        devicePanel = new JPanel(){
+        devicePanel = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                drawConnections(g); // Draw lines between linked devices
+                drawConnections(g);
             }
         };
-        devicePanel.setLayout(null);  // Using null layout for manual positioning
+        devicePanel.setLayout(null);
         add(new JScrollPane(devicePanel), BorderLayout.CENTER);
 
-        // Initialize buttons
         addComputerButton = new JButton("Add Computer");
         addSwitchButton = new JButton("Add Switch");
 
-        // Create panel for buttons
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER));
-        // Add buttons to the panel
         buttonPanel.add(addComputerButton);
         buttonPanel.add(addSwitchButton);
-        // Add buttons panel to the frame
         add(buttonPanel, BorderLayout.SOUTH);
 
         addComputerButton.addActionListener(this);
-
         addSwitchButton.addActionListener(this);
 
         setVisible(true);
     }
 
     private void drawConnections(Graphics g) {
-        g.setColor(Color.BLACK); // Line color
+        g.setColor(Color.BLACK);
         for (Device device : devices) {
             if (device instanceof Computer) {
                 Computer computer = (Computer) device;
-                String linkedDeviceName = computer.getLinkedDevice();
-                if (linkedDeviceName != null && !linkedDeviceName.equals("None")) {
-                    Device linkedDevice = findDeviceByName(linkedDeviceName);
-                    if (linkedDevice != null) {
-                        drawLineBetweenLabels(g, computer.label, linkedDevice.label);
-                    }
+                Device linkedDevice = computer.getLinkedDevice();
+                if (linkedDevice != null) {
+                    drawLineBetweenLabels(g, computer.label, linkedDevice.label);
                 }
             } else if (device instanceof Switch) {
                 Switch switchDevice = (Switch) device;
@@ -92,7 +78,6 @@ public class MainWindow extends JFrame implements ActionListener {
         }
     }
 
-    // Helper to find a device by name
     private Device findDeviceByName(String name) {
         return devices.stream()
                 .filter(d -> d.getName().equals(name))
@@ -100,45 +85,38 @@ public class MainWindow extends JFrame implements ActionListener {
                 .orElse(null);
     }
 
-    // Helper to draw a line between two JLabels
     private void drawLineBetweenLabels(Graphics g, JLabel label1, JLabel label2) {
         Point p1 = getLabelCenter(label1);
         Point p2 = getLabelCenter(label2);
         g.drawLine(p1.x, p1.y, p2.x, p2.y);
     }
 
-    // Helper to get the center point of a JLabel
     private Point getLabelCenter(JLabel label) {
         int x = label.getX() + label.getWidth() / 2;
         int y = label.getY() + label.getHeight() / 2;
         return new Point(x, y);
     }
 
-    // Method to enter device information
     private void showAddComputerDialog() {
-        // Create dialog
         JDialog dialog = new JDialog(this, "Add Computer", true);
         dialog.setSize(300, 200);
         dialog.setLayout(new BorderLayout(4, 4));
         dialog.setLocationRelativeTo(this);
-        // Panel that contains device information text fields
+
         JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Create input fields
         JTextField nameField = new JTextField();
         JTextField ipField = new JTextField();
         JComboBox<String> linkedDeviceCombo = new JComboBox<>();
-        linkedDeviceCombo.addItem("None");  // Default null option
-        // For each to add devices that exists to the combo box
+        linkedDeviceCombo.addItem("None");
         for (Device d : devices) {
             linkedDeviceCombo.addItem(d.getName());
         }
-        // Input panel where to enter information about device
+
         JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 
-        // Add components to dialog
         inputPanel.add(new JLabel("Name:"));
         inputPanel.add(nameField);
         inputPanel.add(new JLabel("IP Address:"));
@@ -146,41 +124,35 @@ public class MainWindow extends JFrame implements ActionListener {
         inputPanel.add(new JLabel("Linked Device:"));
         inputPanel.add(linkedDeviceCombo);
 
-        // Button and add it to the panel
         JButton okButton = new JButton("OK");
         buttonPanel.add(okButton);
-        // Set the main panel of the dialog
         dialog.setContentPane(contentPanel);
-
-        // Add created panel to the main panel(dialog)
         dialog.add(inputPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
 
-
-        // OK button action
         okButton.addActionListener(e -> {
-            // Get the info user have put
             String name = nameField.getText();
             String ip = ipField.getText();
-            String linkedDevice = (String) linkedDeviceCombo.getSelectedItem();
-            // Condition to ensure text fields are not empty
+            String linkedDeviceName = (String) linkedDeviceCombo.getSelectedItem();
+
             if (!name.isEmpty() && !ip.isEmpty()) {
-
                 boolean found = false;
-
                 for (Device d : devices) {
-                    if(d.getName().equals(name)){
+                    if (d.getName().equals(name)) {
                         found = true;
                         break;
                     }
                 }
 
                 if (!found) {
-
+                    Device linkedDevice = linkedDeviceName.equals("None") ? null : findDeviceByName(linkedDeviceName);
                     JLabel label = createComputerLabel(name, ip, linkedDevice, "D:\\eclipse\\computerIcon.png");
                     placeDeviceWithoutOverlap(label);
 
                     Computer computer = new Computer(name, ip, label, linkedDevice);
+                    if (linkedDevice != null) {
+                        computer.setLinkedDevice(linkedDevice); // Updates bidirectional link
+                    }
                     devices.add(computer);
                     devicePanel.add(label);
                     devicePanel.repaint();
@@ -196,19 +168,24 @@ public class MainWindow extends JFrame implements ActionListener {
         dialog.setVisible(true);
     }
 
-    private JLabel createComputerLabel(String name, String ip, String linkedDevice, String iconPath) {
+    private JLabel createComputerLabel(String name, String ip, Device linkedDevice, String iconPath) {
         JLabel label = new JLabel(name);
-        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + linkedDevice + "</html>");  // simple hover
+        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + (linkedDevice != null ? linkedDevice.getName() : "None") + "</html>");
 
         label.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                label.setBorder(null); // highlight
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                label.setBorder(null); // remove highlight
+                // Find the device associated with this label
+                Device device = devices.stream()
+                        .filter(d -> d.label == label)
+                        .findFirst()
+                        .orElse(null);
+                if (device instanceof Computer) {
+                    Computer computer = (Computer) device;
+                    label.setToolTipText("<html>Name: " + computer.getName() +
+                            "<br>IP: " + computer.getIp() +
+                            "<br>Linked: " + computer.getLinkedDeviceName() + "</html>");
+                }
             }
 
             @Override
@@ -217,13 +194,14 @@ public class MainWindow extends JFrame implements ActionListener {
                 onComputerMouseClicked(currentName);
             }
         });
+
         ImageIcon icon = new ImageIcon(new ImageIcon(iconPath).getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH));
         label.setIcon(icon);
         label.setHorizontalTextPosition(JLabel.CENTER);
         label.setVerticalTextPosition(JLabel.BOTTOM);
         label.setSize(80, 80);
-        Point[] offset = {null};  // to store drag offset
 
+        Point[] offset = {null};
         label.addMouseListener(new MouseAdapter() {
             public void mousePressed(MouseEvent e) {
                 offset[0] = new Point(e.getX(), e.getY());
@@ -235,7 +213,6 @@ public class MainWindow extends JFrame implements ActionListener {
                 int x = label.getX() + e.getX() - offset[0].x;
                 int y = label.getY() + e.getY() - offset[0].y;
 
-                // Constrain x and y to stay within devicePanel bounds
                 int minX = 0;
                 int minY = 0;
                 int maxX = devicePanel.getWidth() - label.getWidth();
@@ -248,6 +225,7 @@ public class MainWindow extends JFrame implements ActionListener {
                 devicePanel.repaint();
             }
         });
+
         return label;
     }
 
@@ -276,26 +254,21 @@ public class MainWindow extends JFrame implements ActionListener {
             if (placed) break;
         }
 
-        if (!placed) label.setBounds(20, 20, 80, 80); // fallback
+        if (!placed) label.setBounds(20, 20, 80, 80);
     }
 
     private void onComputerMouseClicked(String name) {
-
-        // Retrieve the selected device based on the name
         Computer computer = devices.stream()
                 .filter(d -> d instanceof Computer && d.getName().equals(name))
                 .map(d -> (Computer) d)
                 .findFirst()
                 .orElse(null);
 
-
-
         if (computer == null) {
             JOptionPane.showMessageDialog(this, "Selected device is not a Computer.");
             return;
         }
 
-        // Create the device information dialog
         JDialog dialog = new JDialog(this, "Device Information", true);
         dialog.setSize(300, 180);
         dialog.setLocationRelativeTo(this);
@@ -308,16 +281,17 @@ public class MainWindow extends JFrame implements ActionListener {
         contentPanel.add(new JLabel("IP Address:"));
         contentPanel.add(new JLabel(computer.getIp()));
         contentPanel.add(new JLabel("Linked Device:"));
-        contentPanel.add(new JLabel(computer.getLinkedDevice()));
+        contentPanel.add(new JLabel(computer.getLinkedDeviceName()));
 
         JButton deleteButton = new JButton("Delete");
         JButton editButton = new JButton("Edit");
 
-        // Delete button action
         deleteButton.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(dialog,
                     "Delete " + computer.getName() + "?", "Confirm", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
+                // Unlink from any linked device
+                computer.setLinkedDevice(null);
                 devices.remove(computer);
                 devicePanel.remove(computer.label);
                 devicePanel.revalidate();
@@ -326,8 +300,7 @@ public class MainWindow extends JFrame implements ActionListener {
             }
         });
 
-        // Edit button action
-        editButton.addActionListener(e -> showEditDialog(computer, dialog));
+        editButton.addActionListener(e -> computerEditDialog(computer, dialog));
 
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(editButton);
@@ -338,18 +311,14 @@ public class MainWindow extends JFrame implements ActionListener {
         dialog.setVisible(true);
     }
 
-    private void showEditDialog(Computer computer, JDialog parentDialog) {
-        // Create the edit dialog
+    private void computerEditDialog(Computer computer, JDialog parentDialog) {
         JDialog editDialog = new JDialog(parentDialog, "Edit Device", true);
         editDialog.setSize(300, 200);
         editDialog.setLocationRelativeTo(parentDialog);
         editDialog.setLayout(new BorderLayout(10, 10));
 
-        // Pre-fill input fields with current values
         JTextField nameField = new JTextField(computer.getName());
         JTextField ipField = new JTextField(computer.getIp());
-
-        // Set up linked device combo box
         JComboBox<String> linkedDeviceCombo = new JComboBox<>();
         linkedDeviceCombo.addItem("None");
         for (Device d : devices) {
@@ -357,7 +326,7 @@ public class MainWindow extends JFrame implements ActionListener {
                 linkedDeviceCombo.addItem(d.getName());
             }
         }
-        linkedDeviceCombo.setSelectedItem(computer.getLinkedDevice());
+        linkedDeviceCombo.setSelectedItem(computer.getLinkedDeviceName());
 
         JPanel editPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         editPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -372,21 +341,17 @@ public class MainWindow extends JFrame implements ActionListener {
         saveButton.addActionListener(e -> {
             String newName = nameField.getText();
             String newIp = ipField.getText();
-            String newLinked = (String) linkedDeviceCombo.getSelectedItem();
+            String newLinkedName = (String) linkedDeviceCombo.getSelectedItem();
 
             if (!newName.isEmpty() && !newIp.isEmpty()) {
-                // Update device fields and the label
+                Device newLinkedDevice = newLinkedName.equals("None") ? null : findDeviceByName(newLinkedName);
                 computer.setName(newName);
                 computer.setIp(newIp);
-                computer.setLinkedDevice(newLinked);
-                computer.label.setText(newName); // Update the JLabel with the new name
-
-                // Update the tooltip with new values
-                computer.label.setToolTipText("<html>Name: " + newName + "<br>IP: " + newIp + "<br>Linked: " + newLinked + "</html>");
-
-                devicePanel.repaint();  // Repaint to reflect changes
-                editDialog.dispose();  // Close the edit dialog
-                parentDialog.dispose(); // Close the parent dialog
+                computer.setLinkedDevice(newLinkedDevice); // Updates bidirectional link
+                computer.label.setText(newName);
+                devicePanel.repaint();
+                editDialog.dispose();
+                parentDialog.dispose();
             } else {
                 JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
             }
@@ -399,46 +364,36 @@ public class MainWindow extends JFrame implements ActionListener {
         editDialog.add(buttonPanel, BorderLayout.SOUTH);
         editDialog.setVisible(true);
     }
-    // Add switch segment
-    private void showAddSwitchDialog() {
-        List<Device> linkedDevices = new ArrayList<Device>();
 
-        // Create dialog
+    private void showAddSwitchDialog() {
+        List<Device> linkedDevices = new ArrayList<>();
+
         JDialog addSwitchDialog = new JDialog(this, "Add Switch", true);
         addSwitchDialog.setSize(300, 200);
         addSwitchDialog.setLayout(new BorderLayout(4, 4));
         addSwitchDialog.setLocationRelativeTo(this);
 
-        // Panel that contains device information
         JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Create input fields
         JTextField nameField = new JTextField();
         JTextField ipField = new JTextField();
 
         JPanel linkedDevicesPanel = new JPanel();
-
         JLabel linkedLabel = new JLabel(String.valueOf(linkedDevices.size()));
-
-        // Create a small "Link" button
         JButton linkButton = new JButton("Link");
         linkButton.setPreferredSize(new Dimension(80, 30));
-
         linkedDevicesPanel.add(linkedLabel);
         linkedDevicesPanel.add(linkButton);
 
         linkButton.addActionListener(e -> {
-            // Create dialog
             JDialog dialog = new JDialog(addSwitchDialog, "Select Devices to Link", true);
             dialog.setSize(200, 250);
             dialog.setLayout(new BorderLayout());
 
-            // Panel for checkboxes
             JPanel checkBoxPanel = new JPanel();
             checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.Y_AXIS));
 
-            // Create checkboxes for all devices
             List<JCheckBox> checkBoxes = new ArrayList<>();
             for (Device d : devices) {
                 JCheckBox checkBox = new JCheckBox(d.getName());
@@ -447,48 +402,37 @@ public class MainWindow extends JFrame implements ActionListener {
                 checkBoxPanel.add(checkBox);
             }
 
-            // Add checkboxes to scroll pane
             JScrollPane scrollPane = new JScrollPane(checkBoxPanel);
             dialog.add(scrollPane, BorderLayout.CENTER);
 
-            // Confirm and Cancel buttons
             JPanel buttonPanel = new JPanel();
             JButton confirmButton = new JButton("Confirm");
             JButton cancelButton = new JButton("Cancel");
 
-            // Confirm action
             confirmButton.addActionListener(e1 -> {
-                // Update linked devices based on selections
                 linkedDevices.clear();
                 for (JCheckBox checkBox : checkBoxes) {
                     if (checkBox.isSelected()) {
-                        for (Device d : devices) {
-                            if (d.getName().equals(checkBox.getText())) {
-                                linkedDevices.add(d);
-                                break; // Avoid duplicate matches
-                            }
+                        Device d = findDeviceByName(checkBox.getText());
+                        if (d != null) {
+                            linkedDevices.add(d);
                         }
                     }
                 }
-                // Update label with count of linked devices
                 linkedLabel.setText(String.valueOf(linkedDevices.size()));
                 dialog.dispose();
             });
 
-            // Cancel action
             cancelButton.addActionListener(e1 -> dialog.dispose());
 
-            // Add buttons to dialog
             buttonPanel.add(confirmButton);
             buttonPanel.add(cancelButton);
             dialog.add(buttonPanel, BorderLayout.SOUTH);
 
-            // Center dialog
             dialog.setLocationRelativeTo(addSwitchDialog);
             dialog.setVisible(true);
         });
 
-        // Input panel with 3 labels, 2 text fields, and linked devices panel
         JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         inputPanel.add(new JLabel("Name:"));
         inputPanel.add(nameField);
@@ -497,28 +441,23 @@ public class MainWindow extends JFrame implements ActionListener {
         inputPanel.add(new JLabel("Linked Devices:"));
         inputPanel.add(linkedDevicesPanel);
 
-        // Button panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         JButton okButton = new JButton("OK");
         buttonPanel.add(okButton);
 
-        // Add panels to the content panel
         contentPanel.add(inputPanel, BorderLayout.CENTER);
         contentPanel.add(buttonPanel, BorderLayout.SOUTH);
         addSwitchDialog.setContentPane(contentPanel);
 
-        // OK button action
         okButton.addActionListener(e -> {
             String name = nameField.getText().trim();
             String ip = ipField.getText().trim();
 
-            // Validate inputs
             if (name.isEmpty() || ip.isEmpty()) {
                 JOptionPane.showMessageDialog(addSwitchDialog, "Please fill all required fields");
                 return;
             }
 
-            // Check for duplicate name
             boolean found = false;
             for (Device d : devices) {
                 if (d.getName().equals(name)) {
@@ -529,39 +468,11 @@ public class MainWindow extends JFrame implements ActionListener {
             if (found) {
                 JOptionPane.showMessageDialog(addSwitchDialog, "Device name already exists, please choose a different name.");
             } else {
-                String names = linkedDevices.stream().map(Device::getName).collect(Collectors.joining(", "));
-                // Create new switch
-                String linkedDeviceName = linkedDevices.isEmpty() ? "None" : names;
-                JLabel label = createSwitchLabel(name, ip, linkedDeviceName, "D:\\eclipse\\switchIcon.png");
+                JLabel label = createSwitchLabel(name, ip, linkedDevices, "D:\\eclipse\\switchIcon.png");
                 placeDeviceWithoutOverlap(label);
 
                 Switch newSwitch = new Switch(name, ip, label);
-                // Set only the first linked device for the new switch
-                List<Device> singleLinkedDevice = new ArrayList<>();
-                if (!linkedDevices.isEmpty()) {
-                    singleLinkedDevice.add(linkedDevices.get(0));
-                }
-                newSwitch.setLinkedDevices(singleLinkedDevice);
-
-                // Update linked devices based on their type
-                for (Device d : linkedDevices) {
-                    if (d instanceof Computer) {
-                        // If the device is a Computer, set the new Switch as its linked device
-                        ((Computer) d).setLinkedDevice(newSwitch.getName());
-                    } else if (d instanceof Switch) {
-                        // If the device is a Switch, add the new Switch to its linked devices list
-                        List<Device> existingLinkedDevices = ((Switch) d).getLinkedDevices();
-                        if (existingLinkedDevices == null) {
-                            existingLinkedDevices = new ArrayList<>();
-                            ((Switch) d).setLinkedDevices(existingLinkedDevices);
-                        }
-                        if (!existingLinkedDevices.contains(newSwitch)) {
-                            existingLinkedDevices.add(newSwitch);
-                        }
-                    }
-                }
-
-                // Add to devices list and panel
+                newSwitch.setLinkedDevices(new ArrayList<>(linkedDevices)); // Updates bidirectional links
                 devices.add(newSwitch);
                 devicePanel.add(label);
                 devicePanel.repaint();
@@ -572,19 +483,26 @@ public class MainWindow extends JFrame implements ActionListener {
         addSwitchDialog.setVisible(true);
     }
 
-    private JLabel createSwitchLabel(String name, String ip, String linkedDevices, String iconPath) {
+    private JLabel createSwitchLabel(String name, String ip, List<Device> linkedDevices, String iconPath) {
         JLabel label = new JLabel(name);
-        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + linkedDevices + "</html>");  // simple hover
+        String linkedNames = linkedDevices.isEmpty() ? "None" : linkedDevices.stream()
+                .map(Device::getName)
+                .collect(Collectors.joining(", "));
+        label.setToolTipText("<html>Name: " + name + "<br>IP: " + ip + "<br>Linked: " + linkedNames + "</html>");
 
         label.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                label.setBorder(null); // highlight
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                label.setBorder(null); // remove highlight
+                Device device = devices.stream()
+                        .filter(d -> d.label == label)
+                        .findFirst()
+                        .orElse(null);
+                if (device instanceof Switch) {
+                    Switch switchDevice = (Switch) device;
+                    label.setToolTipText("<html>Name: " + switchDevice.getName() +
+                            "<br>IP: " + switchDevice.getIp() +
+                            "<br>Linked: " + switchDevice.getLinkedDevicesNames() + "</html>");
+                }
             }
 
             @Override
@@ -593,13 +511,14 @@ public class MainWindow extends JFrame implements ActionListener {
                 onSwitchMouseClicked(currentName);
             }
         });
+
         ImageIcon icon = new ImageIcon(new ImageIcon(iconPath).getImage().getScaledInstance(64, 64, Image.SCALE_SMOOTH));
         label.setIcon(icon);
         label.setHorizontalTextPosition(JLabel.CENTER);
         label.setVerticalTextPosition(JLabel.BOTTOM);
         label.setSize(80, 80);
-        Point[] offset = {null};  // to store drag offset
 
+        Point[] offset = {null};
         label.addMouseListener(new MouseAdapter() {
             public void mousePressed(MouseEvent e) {
                 offset[0] = new Point(e.getX(), e.getY());
@@ -611,7 +530,6 @@ public class MainWindow extends JFrame implements ActionListener {
                 int x = label.getX() + e.getX() - offset[0].x;
                 int y = label.getY() + e.getY() - offset[0].y;
 
-                // Constrain x and y to stay within devicePanel bounds
                 int minX = 0;
                 int minY = 0;
                 int maxX = devicePanel.getWidth() - label.getWidth();
@@ -624,26 +542,22 @@ public class MainWindow extends JFrame implements ActionListener {
                 devicePanel.repaint();
             }
         });
+
         return label;
     }
 
     private void onSwitchMouseClicked(String name) {
-
-        // Retrieve the selected device based on the name
         Switch switchDevice = devices.stream()
                 .filter(d -> d instanceof Switch && d.getName().equals(name))
                 .map(d -> (Switch) d)
                 .findFirst()
                 .orElse(null);
 
-
-
         if (switchDevice == null) {
-            JOptionPane.showMessageDialog(this, "Selected device is not a Computer.");
+            JOptionPane.showMessageDialog(this, "Selected device is not a Switch.");
             return;
         }
 
-        // Create the device information dialog
         JDialog dialog = new JDialog(this, "Device Information", true);
         dialog.setSize(300, 180);
         dialog.setLocationRelativeTo(this);
@@ -655,18 +569,17 @@ public class MainWindow extends JFrame implements ActionListener {
         contentPanel.add(new JLabel(switchDevice.getName()));
         contentPanel.add(new JLabel("IP Address:"));
         contentPanel.add(new JLabel(switchDevice.getIp()));
-        contentPanel.add(new JLabel("Linked Device:"));
-        String names = switchDevice.getLinkedDevices().stream().map(Device::getName).collect(Collectors.joining(", "));
-        contentPanel.add(new JLabel(names));
+        contentPanel.add(new JLabel("Linked Devices:"));
+        contentPanel.add(new JLabel(switchDevice.getLinkedDevicesNames()));
 
         JButton deleteButton = new JButton("Delete");
         JButton editButton = new JButton("Edit");
 
-        // Delete button action
         deleteButton.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(dialog,
                     "Delete " + switchDevice.getName() + "?", "Confirm", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
+                switchDevice.setLinkedDevices(new ArrayList<>()); // Clear links
                 devices.remove(switchDevice);
                 devicePanel.remove(switchDevice.label);
                 devicePanel.revalidate();
@@ -675,7 +588,6 @@ public class MainWindow extends JFrame implements ActionListener {
             }
         });
 
-        // Edit button action
         editButton.addActionListener(e -> switchEditDialog(switchDevice, dialog));
 
         JPanel buttonPanel = new JPanel();
@@ -688,43 +600,32 @@ public class MainWindow extends JFrame implements ActionListener {
     }
 
     private void switchEditDialog(Switch switchDevice, JDialog parentDialog) {
-        // Create the edit dialog
-        JDialog editDialog = new JDialog(parentDialog, "Edit Device", true);
+        JDialog editDialog = new JDialog(parentDialog, "Edit Switch", true);
         editDialog.setSize(300, 200);
         editDialog.setLocationRelativeTo(parentDialog);
         editDialog.setLayout(new BorderLayout(10, 10));
 
-        // Pre-fill input fields with current values
         JTextField nameField = new JTextField(switchDevice.getName());
         JTextField ipField = new JTextField(switchDevice.getIp());
 
         JPanel linkedDevicesPanel = new JPanel();
-
         JLabel linkedLabel = new JLabel(String.valueOf(switchDevice.getLinkedDevices().size()));
-
-        // Create a small "Link" button
         JButton linkButton = new JButton("Link");
-        linkButton.setSize(80, 30); // Small button size
-
+        linkButton.setPreferredSize(new Dimension(80, 30));
         linkedDevicesPanel.add(linkedLabel);
         linkedDevicesPanel.add(linkButton);
 
         linkButton.addActionListener(e -> {
-            // Create dialog
             JDialog dialog = new JDialog(this, "Select Devices to Link", true);
             dialog.setSize(200, 250);
             dialog.setLayout(new BorderLayout());
 
-            // Panel for checkboxes
             JPanel checkBoxPanel = new JPanel();
             checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.Y_AXIS));
 
-            List<Device> linkedDevices = switchDevice.getLinkedDevices();
-
-            // Create checkboxes for all devices
             List<JCheckBox> checkBoxes = new ArrayList<>();
             for (Device d : devices) {
-                if(!d.getName().equals(switchDevice.getName())) {
+                if (!d.getName().equals(switchDevice.getName())) {
                     JCheckBox checkBox = new JCheckBox(d.getName());
                     checkBox.setSelected(switchDevice.getLinkedDevices().contains(d));
                     checkBoxes.add(checkBox);
@@ -732,43 +633,34 @@ public class MainWindow extends JFrame implements ActionListener {
                 }
             }
 
-            // Add checkboxes to scroll pane
             JScrollPane scrollPane = new JScrollPane(checkBoxPanel);
             dialog.add(scrollPane, BorderLayout.CENTER);
 
-            // Confirm and Cancel buttons
             JPanel buttonPanel = new JPanel();
             JButton confirmButton = new JButton("Confirm");
             JButton cancelButton = new JButton("Cancel");
 
-            // Confirm action
             confirmButton.addActionListener(e1 -> {
-                // Update linked devices based on selections
-                linkedDevices.clear();
+                List<Device> newLinkedDevices = new ArrayList<>();
                 for (JCheckBox checkBox : checkBoxes) {
                     if (checkBox.isSelected()) {
-                        for (Device d : devices) {
-                            if (d.getName().equals(checkBox.getText())) {
-                                linkedDevices.add(d);
-                            }
+                        Device d = findDeviceByName(checkBox.getText());
+                        if (d != null) {
+                            newLinkedDevices.add(d);
                         }
                     }
                 }
-                // Update label
-                linkedLabel.setText(String.valueOf(linkedDevices.size()));
-                switchDevice.setLinkedDevices(linkedDevices);
+                linkedLabel.setText(String.valueOf(newLinkedDevices.size()));
+                switchDevice.setLinkedDevices(newLinkedDevices); // Updates bidirectional links
                 dialog.dispose();
             });
 
-            // Cancel action
             cancelButton.addActionListener(e1 -> dialog.dispose());
 
-            // Add buttons to dialog
             buttonPanel.add(confirmButton);
             buttonPanel.add(cancelButton);
             dialog.add(buttonPanel, BorderLayout.SOUTH);
 
-            // Center dialog
             dialog.setLocationRelativeTo(this);
             dialog.setVisible(true);
         });
@@ -779,7 +671,7 @@ public class MainWindow extends JFrame implements ActionListener {
         editPanel.add(nameField);
         editPanel.add(new JLabel("IP Address:"));
         editPanel.add(ipField);
-        editPanel.add(new JLabel("Linked Device:"));
+        editPanel.add(new JLabel("Linked Devices:"));
         editPanel.add(linkedDevicesPanel);
 
         JButton saveButton = new JButton("Save");
@@ -788,18 +680,12 @@ public class MainWindow extends JFrame implements ActionListener {
             String newIp = ipField.getText();
 
             if (!newName.isEmpty() && !newIp.isEmpty()) {
-                // Update device fields and the label
                 switchDevice.setName(newName);
                 switchDevice.setIp(newIp);
-                switchDevice.setLinkedDevices(switchDevice.getLinkedDevices());
-                switchDevice.label.setText(newName); // Update the JLabel with the new name
-
-                // Update the tooltip with new values
-                switchDevice.label.setToolTipText("<html>Name: " + newName + "<br>IP: " + newIp + "<br>Linked: " + switchDevice.getLinkedDevices().toString() + "</html>");
-
-                devicePanel.repaint();  // Repaint to reflect changes
-                editDialog.dispose();  // Close the edit dialog
-                parentDialog.dispose(); // Close the parent dialog
+                switchDevice.label.setText(newName);
+                devicePanel.repaint();
+                editDialog.dispose();
+                parentDialog.dispose();
             } else {
                 JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
             }
@@ -812,5 +698,4 @@ public class MainWindow extends JFrame implements ActionListener {
         editDialog.add(buttonPanel, BorderLayout.SOUTH);
         editDialog.setVisible(true);
     }
-
 }
