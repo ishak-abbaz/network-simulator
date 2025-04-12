@@ -111,7 +111,9 @@ public class MainWindow extends JFrame implements ActionListener {
         JComboBox<String> linkedDeviceCombo = new JComboBox<>();
         linkedDeviceCombo.addItem("None");
         for (Device d : devices) {
-            linkedDeviceCombo.addItem(d.getName());
+            if (!(d instanceof Computer) || ((Computer) d).getLinkedDevice() == null) {
+                linkedDeviceCombo.addItem(d.getName());
+            }
         }
 
         JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
@@ -131,37 +133,41 @@ public class MainWindow extends JFrame implements ActionListener {
         dialog.add(buttonPanel, BorderLayout.SOUTH);
 
         okButton.addActionListener(e -> {
-            String name = nameField.getText();
-            String ip = ipField.getText();
+            String name = nameField.getText().trim();
+            String ip = validateAndFormatIP(ipField.getText(), dialog);
             String linkedDeviceName = (String) linkedDeviceCombo.getSelectedItem();
 
-            if (!name.isEmpty() && !ip.isEmpty()) {
-                boolean found = false;
-                for (Device d : devices) {
-                    if (d.getName().equals(name)) {
-                        found = true;
-                        break;
-                    }
-                }
+            if (name.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog, "Name cannot be empty!");
+                return;
+            }
+            if (ip == null) {
+                return; // Validation failed, error already shown
+            }
 
-                if (!found) {
-                    Device linkedDevice = linkedDeviceName.equals("None") ? null : findDeviceByName(linkedDeviceName);
-                    JLabel label = createComputerLabel(name, ip, linkedDevice, "D:\\eclipse\\computerIcon.png");
-                    placeDeviceWithoutOverlap(label);
-
-                    Computer computer = new Computer(name, ip, label, linkedDevice);
-                    if (linkedDevice != null) {
-                        computer.setLinkedDevice(linkedDevice); // Updates bidirectional link
-                    }
-                    devices.add(computer);
-                    devicePanel.add(label);
-                    devicePanel.repaint();
-                    dialog.dispose();
-                } else {
-                    JOptionPane.showMessageDialog(dialog, "Device name already exists, please choose a different name.");
+            boolean found = false;
+            for (Device d : devices) {
+                if (d.getName().equals(name)) {
+                    found = true;
+                    break;
                 }
+            }
+
+            if (!found) {
+                Device linkedDevice = linkedDeviceName.equals("None") ? null : findDeviceByName(linkedDeviceName);
+                JLabel label = createComputerLabel(name, ip, linkedDevice, "D:\\eclipse\\computerIcon.png");
+                placeDeviceWithoutOverlap(label);
+
+                Computer computer = new Computer(name, ip, label, linkedDevice);
+                if (linkedDevice != null) {
+                    computer.setLinkedDevice(linkedDevice); // Updates bidirectional link
+                }
+                devices.add(computer);
+                devicePanel.add(label);
+                devicePanel.repaint();
+                dialog.dispose();
             } else {
-                JOptionPane.showMessageDialog(dialog, "Please fill all required fields");
+                JOptionPane.showMessageDialog(dialog, "Device name already exists, please choose a different name.");
             }
         });
 
@@ -323,7 +329,9 @@ public class MainWindow extends JFrame implements ActionListener {
         linkedDeviceCombo.addItem("None");
         for (Device d : devices) {
             if (!d.getName().equals(computer.getName())) {
-                linkedDeviceCombo.addItem(d.getName());
+                if (!(d instanceof Computer) || ((Computer) d).getLinkedDevice() == null) {
+                    linkedDeviceCombo.addItem(d.getName());
+                }
             }
         }
         linkedDeviceCombo.setSelectedItem(computer.getLinkedDeviceName());
@@ -339,22 +347,34 @@ public class MainWindow extends JFrame implements ActionListener {
 
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
-            String newName = nameField.getText();
-            String newIp = ipField.getText();
+            String newName = nameField.getText().trim();
+            String newIp = validateAndFormatIP(ipField.getText(), editDialog);
             String newLinkedName = (String) linkedDeviceCombo.getSelectedItem();
 
-            if (!newName.isEmpty() && !newIp.isEmpty()) {
-                Device newLinkedDevice = newLinkedName.equals("None") ? null : findDeviceByName(newLinkedName);
-                computer.setName(newName);
-                computer.setIp(newIp);
-                computer.setLinkedDevice(newLinkedDevice); // Updates bidirectional link
-                computer.label.setText(newName);
-                devicePanel.repaint();
-                editDialog.dispose();
-                parentDialog.dispose();
-            } else {
-                JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
+            if (newName.isEmpty()) {
+                JOptionPane.showMessageDialog(editDialog, "Name cannot be empty!");
+                return;
             }
+            if (newIp == null) {
+                return; // Validation failed, error already shown
+            }
+
+            // Check for duplicate name
+            boolean nameExists = devices.stream()
+                    .anyMatch(d -> d != computer && d.getName().equals(newName));
+            if (nameExists) {
+                JOptionPane.showMessageDialog(editDialog, "Device name already exists, please choose a different name.");
+                return;
+            }
+
+            Device newLinkedDevice = newLinkedName.equals("None") ? null : findDeviceByName(newLinkedName);
+            computer.setName(newName);
+            computer.setIp(newIp);
+            computer.setLinkedDevice(newLinkedDevice); // Updates bidirectional link
+            computer.label.setText(newName);
+            devicePanel.repaint();
+            editDialog.dispose();
+            parentDialog.dispose();
         });
 
         JPanel buttonPanel = new JPanel();
@@ -396,10 +416,12 @@ public class MainWindow extends JFrame implements ActionListener {
 
             List<JCheckBox> checkBoxes = new ArrayList<>();
             for (Device d : devices) {
-                JCheckBox checkBox = new JCheckBox(d.getName());
-                checkBox.setSelected(linkedDevices.contains(d));
-                checkBoxes.add(checkBox);
-                checkBoxPanel.add(checkBox);
+                if (!(d instanceof Computer) || ((Computer) d).getLinkedDevice() == null) {
+                    JCheckBox checkBox = new JCheckBox(d.getName());
+                    checkBox.setSelected(linkedDevices.contains(d));
+                    checkBoxes.add(checkBox);
+                    checkBoxPanel.add(checkBox);
+                }
             }
 
             JScrollPane scrollPane = new JScrollPane(checkBoxPanel);
@@ -451,11 +473,14 @@ public class MainWindow extends JFrame implements ActionListener {
 
         okButton.addActionListener(e -> {
             String name = nameField.getText().trim();
-            String ip = ipField.getText().trim();
+            String ip = validateAndFormatIP(ipField.getText(), addSwitchDialog);
 
-            if (name.isEmpty() || ip.isEmpty()) {
-                JOptionPane.showMessageDialog(addSwitchDialog, "Please fill all required fields");
+            if (name.isEmpty()) {
+                JOptionPane.showMessageDialog(addSwitchDialog, "Name cannot be empty!");
                 return;
+            }
+            if (ip == null) {
+                return; // Validation failed, error already shown
             }
 
             boolean found = false;
@@ -626,10 +651,12 @@ public class MainWindow extends JFrame implements ActionListener {
             List<JCheckBox> checkBoxes = new ArrayList<>();
             for (Device d : devices) {
                 if (!d.getName().equals(switchDevice.getName())) {
-                    JCheckBox checkBox = new JCheckBox(d.getName());
-                    checkBox.setSelected(switchDevice.getLinkedDevices().contains(d));
-                    checkBoxes.add(checkBox);
-                    checkBoxPanel.add(checkBox);
+                    if (!(d instanceof Computer) || ((Computer) d).getLinkedDevice() == null) {
+                        JCheckBox checkBox = new JCheckBox(d.getName());
+                        checkBox.setSelected(switchDevice.getLinkedDevices().contains(d));
+                        checkBoxes.add(checkBox);
+                        checkBoxPanel.add(checkBox);
+                    }
                 }
             }
 
@@ -676,19 +703,31 @@ public class MainWindow extends JFrame implements ActionListener {
 
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(e -> {
-            String newName = nameField.getText();
-            String newIp = ipField.getText();
+            String newName = nameField.getText().trim();
+            String newIp = validateAndFormatIP(ipField.getText(), editDialog);
 
-            if (!newName.isEmpty() && !newIp.isEmpty()) {
-                switchDevice.setName(newName);
-                switchDevice.setIp(newIp);
-                switchDevice.label.setText(newName);
-                devicePanel.repaint();
-                editDialog.dispose();
-                parentDialog.dispose();
-            } else {
-                JOptionPane.showMessageDialog(editDialog, "Name and IP cannot be empty!");
+            if (newName.isEmpty()) {
+                JOptionPane.showMessageDialog(editDialog, "Name cannot be empty!");
+                return;
             }
+            if (newIp == null) {
+                return; // Validation failed, error already shown
+            }
+
+            // Check for duplicate name
+            boolean nameExists = devices.stream()
+                    .anyMatch(d -> d != switchDevice && d.getName().equals(newName));
+            if (nameExists) {
+                JOptionPane.showMessageDialog(editDialog, "Device name already exists, please choose a different name.");
+                return;
+            }
+
+            switchDevice.setName(newName);
+            switchDevice.setIp(newIp);
+            switchDevice.label.setText(newName);
+            devicePanel.repaint();
+            editDialog.dispose();
+            parentDialog.dispose();
         });
 
         JPanel buttonPanel = new JPanel();
@@ -698,4 +737,35 @@ public class MainWindow extends JFrame implements ActionListener {
         editDialog.add(buttonPanel, BorderLayout.SOUTH);
         editDialog.setVisible(true);
     }
+
+    private String validateAndFormatIP(String ip, JDialog dialog) {
+        if (ip == null || ip.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(dialog, "IP Address cannot be empty!");
+            return null;
+        }
+
+        String[] segments = ip.trim().split("\\.");
+        if (segments.length != 4) {
+            JOptionPane.showMessageDialog(dialog, "IP Address must have exactly four segments (e.g., 192.168.1.100)!");
+            return null;
+        }
+
+        int[] values = new int[4];
+        for (int i = 0; i < 4; i++) {
+            try {
+                values[i] = Integer.parseInt(segments[i].trim());
+                if (values[i] < 0 || values[i] > 255) {
+                    JOptionPane.showMessageDialog(dialog, "Each IP segment must be between 0 and 255!");
+                    return null;
+                }
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(dialog, "IP segments must be valid numbers!");
+                return null;
+            }
+        }
+
+        // Format each segment to three digits with leading zeros
+        return String.format("%03d.%03d.%03d.%03d", values[0], values[1], values[2], values[3]);
+    }
+
 }
