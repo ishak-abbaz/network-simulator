@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class AdministratorWindow extends JFrame {
     private List<User> users = new ArrayList<>();
@@ -26,9 +28,7 @@ public class AdministratorWindow extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // Initialize user list with some sample data
-        users.add(new User("USB001", "john_doe", "pass123", "admin"));
-        users.add(new User("USB002", "jane_smith", "pass456", "user"));
+
         loadUsersFromDB();
         // Top panel for filtering and adding users
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -91,13 +91,19 @@ public class AdministratorWindow extends JFrame {
         editButton.addActionListener(e -> showEditUserDialog(user));
 
         // Delete action
+        // In createUserEntry, replace the deleteButton.addActionListener with:
         deleteButton.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this,
                     "Delete user " + user.getUserName() + "?",
                     "Confirm Deletion", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
-                users.remove(user);
-                updateUserList();
+                if (user.getRole().equalsIgnoreCase("admin") && countAdmins() <= 1) {
+                    JOptionPane.showMessageDialog(this, "Cannot delete the last admin user!", "Error", JOptionPane.ERROR_MESSAGE);
+                } else {
+                    deleteUserFromDB(user.getUserName());
+                    users.remove(user);
+                    updateUserList();
+                }
             }
         });
 
@@ -111,29 +117,29 @@ public class AdministratorWindow extends JFrame {
         return entry;
     }
 
-
-    /// ///
-
     private void showAddUserDialog() {
         JDialog dialog = new JDialog(this, "Add User", true);
-        dialog.setSize(300, 250); // Original size
-        dialog.setLayout(new BorderLayout(10, 10)); // Original layout
+        dialog.setSize(300, 250);
+        dialog.setLayout(new BorderLayout(10, 10));
         dialog.setLocationRelativeTo(this);
 
-        // JComboBox for USB devices
-        JComboBox<String> usbCombo = new JComboBox<>();
-        Map<String, String> usbDevices = detectUSBDrives(); // Maps drive name to serial number
-        usbCombo.addItem("No USB Detected"); // Default option
-        usbDevices.forEach((name, serial) -> usbCombo.addItem(name));
+        // USB detection components
+        DefaultComboBoxModel<String> usbComboModel = new DefaultComboBoxModel<>();
+        JComboBox<String> usbCombo = new JComboBox<>(usbComboModel);
+        JLabel statusLabel = new JLabel("Detecting USB...", SwingConstants.CENTER);
 
+        // Input fields
         JTextField usernameField = new JTextField();
         JPasswordField passwordField = new JPasswordField();
-        JComboBox<String> roleCombo = new JComboBox<>(new String[]{"admin", "user"});
+        JComboBox<String> roleCombo = new JComboBox<>(new String[]{"user", "admin"});
 
-        JPanel inputPanel = new JPanel(new GridLayout(4, 2, 10, 10)); // Original grid layout
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10)); // Original padding
-        inputPanel.add(new JLabel("USB Device:")); // Changed label to "USB Device"
+        // Input panel
+        JPanel inputPanel = new JPanel(new GridLayout(5, 2, 10, 10));
+        inputPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        inputPanel.add(new JLabel("USB Device:"));
         inputPanel.add(usbCombo);
+        inputPanel.add(new JLabel(""));
+        inputPanel.add(statusLabel);
         inputPanel.add(new JLabel("Username:"));
         inputPanel.add(usernameField);
         inputPanel.add(new JLabel("Password:"));
@@ -141,24 +147,78 @@ public class AdministratorWindow extends JFrame {
         inputPanel.add(new JLabel("Role:"));
         inputPanel.add(roleCombo);
 
+        // Button panel
         JButton saveButton = new JButton("Save");
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER)); // Original button layout
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         buttonPanel.add(saveButton);
 
         dialog.add(inputPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
 
+        // USB detection logic
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Map<String, String> usbDevices = new HashMap<>();
+
+        Runnable usbDetector = () -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                Map<String, String> newUsbDevices = detectUSBDrives();
+                if (!newUsbDevices.isEmpty()) {
+                    SwingUtilities.invokeLater(() -> {
+                        usbDevices.clear();
+                        usbDevices.putAll(newUsbDevices);
+                        usbComboModel.removeAllElements();
+                        newUsbDevices.forEach((name, serial) -> usbComboModel.addElement(name));
+                        statusLabel.setText("USB detected");
+                        saveButton.setEnabled(true);
+                    });
+                    break;
+                } else {
+                    SwingUtilities.invokeLater(() -> {
+                        usbComboModel.removeAllElements();
+                        usbComboModel.addElement("No USB Detected");
+                        statusLabel.setText("Please insert a USB...");
+                        saveButton.setEnabled(false);
+                    });
+                }
+                try {
+                    Thread.sleep(2000); // Poll every 2 seconds
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        };
+
+        // Start USB detection
+        Map<String, String> initialUsbDevices = detectUSBDrives();
+        if (!initialUsbDevices.isEmpty()) {
+            usbDevices.putAll(initialUsbDevices);
+            initialUsbDevices.forEach((name, serial) -> usbComboModel.addElement(name));
+            statusLabel.setText("USB detected");
+            saveButton.setEnabled(true);
+        } else {
+            usbComboModel.addElement("No USB Detected");
+            statusLabel.setText("Please insert a USB...");
+            saveButton.setEnabled(false);
+            executor.submit(usbDetector);
+        }
+
+        // Save button action
         saveButton.addActionListener(e -> {
             String selectedUsbName = (String) usbCombo.getSelectedItem();
-            String usbSerial = usbDevices.getOrDefault(selectedUsbName, ""); // Get serial from name
+            String usbSerial = usbDevices.getOrDefault(selectedUsbName, "");
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
             String role = (String) roleCombo.getSelectedItem();
 
             if (!selectedUsbName.equals("No USB Detected") && !username.isEmpty() && !password.isEmpty()) {
                 if (users.stream().noneMatch(u -> u.getUserName().equals(username))) {
-                    users.add(new User(usbSerial, username, password, role)); // Save serial number
+                    User newUser = new User(usbSerial, username, password, role);
+                    users.add(newUser);
+
+                    addUserToDB(newUser);
                     updateUserList();
+                    executor.shutdownNow();
                     dialog.dispose();
                 } else {
                     JOptionPane.showMessageDialog(dialog, "Username already exists!");
@@ -168,38 +228,45 @@ public class AdministratorWindow extends JFrame {
             }
         });
 
+        // Cleanup on dialog close
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                executor.shutdownNow();
+            }
+        });
+
         dialog.setVisible(true);
     }
 
-    // Method to detect USB drives based on your isUsbRecognized logic
     private Map<String, String> detectUSBDrives() {
         Map<String, String> usbDevices = new HashMap<>();
-        File[] roots = File.listRoots(); // Get all drives (e.g., C:, D:, etc.)
+        File[] roots = File.listRoots();
 
         for (File root : roots) {
             try {
                 FileStore store = Files.getFileStore(root.toPath());
-                Object serialObj = store.getAttribute("volume:vsn");
-                String serialHex;
-                if (serialObj instanceof Integer) {
-                    serialHex = Integer.toHexString((Integer) serialObj).toUpperCase();
-                } else if (serialObj instanceof Long) {
-                    serialHex = Long.toHexString((Long) serialObj).toUpperCase();
-                } else {
-                    serialHex = "UNKNOWN";
+                // Only include removable drives
+                if ((Boolean) store.getAttribute("volume:isRemovable")) {
+                    Object serialObj = store.getAttribute("volume:vsn");
+                    String serialHex;
+                    if (serialObj instanceof Integer) {
+                        serialHex = Integer.toHexString((Integer) serialObj).toUpperCase();
+                    } else if (serialObj instanceof Long) {
+                        serialHex = Long.toHexString((Long) serialObj).toUpperCase();
+                    } else {
+                        serialHex = "UNKNOWN";
+                    }
+                    String driveName = root.getAbsolutePath();
+                    usbDevices.put(driveName, serialHex);
                 }
-                // Use the drive letter or a descriptive name as the display name
-                String driveName = root.getAbsolutePath() + " (" + store.getAttribute("volume:isRemovable") + ")";
-                usbDevices.put(driveName, serialHex);
             } catch (Exception e) {
-                // Skip drives that can't be accessed
                 continue;
             }
         }
         return usbDevices;
     }
 
-    // Placeholder for isUserExists (assuming it checks against your user list)
     private User isUserExists(String serialHex) {
         return users.stream()
                 .filter(u -> u.getUsbSerialNumber().equals(serialHex))
@@ -207,7 +274,6 @@ public class AdministratorWindow extends JFrame {
                 .orElse(null);
     }
 
-    /// ///
     private void showEditUserDialog(User user) {
         JDialog dialog = new JDialog(this, "Edit User", true);
         dialog.setSize(300, 250);
@@ -245,11 +311,16 @@ public class AdministratorWindow extends JFrame {
             String role = (String) roleCombo.getSelectedItem();
 
             if (!usbSerial.isEmpty() && !username.isEmpty() && !password.isEmpty()) {
+                if (user.getRole().equalsIgnoreCase("admin") && countAdmins() <= 1 && !role.equalsIgnoreCase("admin")) {
+                    JOptionPane.showMessageDialog(dialog, "Cannot change the role of the last admin!", "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
                 if (users.stream().noneMatch(u -> u != user && u.getUserName().equals(username))) {
                     user.setUsbSerialNumber(usbSerial);
                     user.setUserName(username);
                     user.setPassword(password);
                     user.setRole(role);
+                    editUserFromDB(usbSerial, user);
                     updateUserList();
                     dialog.dispose();
                 } else {
@@ -328,10 +399,14 @@ public class AdministratorWindow extends JFrame {
         }
     }
 
+    private int countAdmins() {
+        return (int) users.stream().filter(u -> u.getRole().equalsIgnoreCase("admin")).count();
+    }
+
     private void editUserFromDB(String usbSerialNum, User user) {
         try {
             Connection dbConnection = getConnection();
-            PreparedStatement stmt = dbConnection.prepareStatement("UPDATE users SET usbSerialNum = ?, userName = ?, password = ?, role = ? WHERE id = ?");
+            PreparedStatement stmt = dbConnection.prepareStatement("UPDATE users SET usbSerialNum = ?, userName = ?, password = ?, role = ? WHERE usbSerialNum = ?");
             stmt.setString(1, user.getUsbSerialNumber());
             stmt.setString(2, user.getUserName());
             stmt.setString(3, user.getPassword());
@@ -345,13 +420,18 @@ public class AdministratorWindow extends JFrame {
     }
 
     private void deleteUserFromDB(String userName) {
-        try{
+        try {
             Connection dbConnection = getConnection();
+            User user = users.stream().filter(u -> u.getUserName().equals(userName)).findFirst().orElse(null);
+            if (user != null && user.getRole().equalsIgnoreCase("admin") && countAdmins() <= 1) {
+                JOptionPane.showMessageDialog(this, "Cannot delete the last admin user!", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             PreparedStatement stmt = dbConnection.prepareStatement("DELETE FROM users WHERE userName = ?");
             stmt.setString(1, userName);
             stmt.executeUpdate();
             dbConnection.close();
-        } catch (SQLException e){
+        } catch (SQLException e) {
             System.out.println("SQL Error Brotha");
         }
     }

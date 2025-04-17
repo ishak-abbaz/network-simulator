@@ -8,55 +8,23 @@ import java.util.stream.Collectors;
 public class Switch extends Device {
     private List<Device> linkedDevices;
 
-    public Switch(String name, String ipAddress, JLabel label) {
-        super(name, ipAddress, label);
+    public Switch(String name, String ip, JLabel label) {
+        super(name, ip, label);
         this.linkedDevices = new ArrayList<>();
     }
 
     public List<Device> getLinkedDevices() {
-        return linkedDevices;
+        return new ArrayList<>(linkedDevices); // Return a copy to prevent external modification
     }
 
     public void setLinkedDevices(List<Device> newLinkedDevices) {
-        // Remove this Switch from the old linked devices
-        for (Device oldLinked : linkedDevices) {
-            if (oldLinked instanceof Computer) {
-                Computer comp = (Computer) oldLinked;
-                if (comp.getLinkedDevice() == this) {
-                    comp.setLinkedDevice(null);
-                }
-            } else if (oldLinked instanceof Switch) {
-                ((Switch) oldLinked).getLinkedDevices().remove(this);
-            }
-        }
-
-        linkedDevices.clear();
-        linkedDevices.addAll(newLinkedDevices);
-
-        // Update new linked devices
-        for (Device newLinked : newLinkedDevices) {
-            if (newLinked instanceof Computer) {
-                Computer comp = (Computer) newLinked;
-                if (comp.getLinkedDevice() != this) {
-                    comp.setLinkedDevice(this);
-                }
-            } else if (newLinked instanceof Switch) {
-                List<Device> otherLinkedDevices = ((Switch) newLinked).getLinkedDevices();
-                if (!otherLinkedDevices.contains(this)) {
-                    otherLinkedDevices.add(this);
-                }
-            }
-        }
+        // Safely replace the linkedDevices list without iteration
+        this.linkedDevices = new ArrayList<>(newLinkedDevices != null ? newLinkedDevices : new ArrayList<>());
     }
 
     public String getLinkedDevicesNames() {
-        return linkedDevices.isEmpty() ? "None" : linkedDevices.stream()
+        return linkedDevices.stream()
                 .map(Device::getName)
                 .collect(Collectors.joining(", "));
-    }
-
-    @Override
-    public String toString() {
-        return super.toString() + ", Linked: " + getLinkedDevicesNames();
     }
 }
