@@ -16,8 +16,9 @@ public class Main extends JPanel {
             e.printStackTrace();
         }
 
-//          MainWindow mainWindow = new MainWindow();
-          AuthentifiactionWindow aw = new AuthentifiactionWindow();
-//          AdministratorWindow adminWindow = new AdministratorWindow();
+        DatabaseSetup ds = new DatabaseSetup();
+        ds.setupAndInsert("your pc database password");
+        // Uncomment after creating database
+//          AuthentifiactionWindow aw = new AuthentifiactionWindow();
     }
 }

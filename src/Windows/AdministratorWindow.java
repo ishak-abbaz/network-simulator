@@ -28,7 +28,6 @@ public class AdministratorWindow extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-
         loadUsersFromDB();
         // Top panel for filtering and adding users
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -91,7 +90,6 @@ public class AdministratorWindow extends JFrame {
         editButton.addActionListener(e -> showEditUserDialog(user));
 
         // Delete action
-        // In createUserEntry, replace the deleteButton.addActionListener with:
         deleteButton.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this,
                     "Delete user " + user.getUserName() + "?",
@@ -162,24 +160,20 @@ public class AdministratorWindow extends JFrame {
         Runnable usbDetector = () -> {
             while (!Thread.currentThread().isInterrupted()) {
                 Map<String, String> newUsbDevices = detectUSBDrives();
-                if (!newUsbDevices.isEmpty()) {
-                    SwingUtilities.invokeLater(() -> {
-                        usbDevices.clear();
-                        usbDevices.putAll(newUsbDevices);
-                        usbComboModel.removeAllElements();
+                SwingUtilities.invokeLater(() -> {
+                    usbDevices.clear();
+                    usbDevices.putAll(newUsbDevices);
+                    usbComboModel.removeAllElements();
+                    if (!newUsbDevices.isEmpty()) {
                         newUsbDevices.forEach((name, serial) -> usbComboModel.addElement(name));
                         statusLabel.setText("USB detected");
                         saveButton.setEnabled(true);
-                    });
-                    break;
-                } else {
-                    SwingUtilities.invokeLater(() -> {
-                        usbComboModel.removeAllElements();
+                    } else {
                         usbComboModel.addElement("No USB Detected");
                         statusLabel.setText("Please insert a USB...");
                         saveButton.setEnabled(false);
-                    });
-                }
+                    }
+                });
                 try {
                     Thread.sleep(2000); // Poll every 2 seconds
                 } catch (InterruptedException e) {
@@ -257,8 +251,11 @@ public class AdministratorWindow extends JFrame {
                     } else {
                         serialHex = "UNKNOWN";
                     }
-                    String driveName = root.getAbsolutePath();
-                    usbDevices.put(driveName, serialHex);
+                    // Check if the USB serial is already registered
+                    if (isUserExists(serialHex) == null) {
+                        String driveName = root.getAbsolutePath();
+                        usbDevices.put(driveName, serialHex);
+                    }
                 }
             } catch (Exception e) {
                 continue;
